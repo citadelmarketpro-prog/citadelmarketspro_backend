@@ -168,6 +168,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://citadelprofront.vercel.app",
     "https://www.citadelmarketspro.com",
     "https://citadelmarketspro.com",
+    "https://citadelmarketspro.vercel.app",
 ]
 CORS_ALLOW_HEADERS = [
     'accept',
