@@ -861,6 +861,7 @@ class AdminWallet(models.Model):
         ("BNB", "Binance Coin (BNB)"),
         ("TRX", "Tron (TRX)"),
         ("USDC", "USDC (BASE)"),
+        ("XRP", "XRP"),
     ]
 
     currency = models.CharField(max_length=100, choices=CURRENCY_CHOICES, unique=True)
