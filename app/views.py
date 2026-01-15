@@ -1651,8 +1651,6 @@ def change_user_password(request):
     )
 
 
-
-
 # ADD THESE UPDATED VIEWS TO YOUR app/views.py
 
 @api_view(["GET"])

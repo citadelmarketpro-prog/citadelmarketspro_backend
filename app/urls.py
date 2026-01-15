@@ -120,6 +120,11 @@ from .auth_views import (
     enable_2fa,
     disable_2fa,
     get_2fa_status,
+
+    # Reset Password
+    request_password_reset,
+    reset_password,
+    validate_reset_token,
 )
 
 urlpatterns = [
@@ -132,6 +137,11 @@ urlpatterns = [
     path("login/", login_with_2fa, name="login-with-2fa"),
     path("verify-2fa/", verify_2fa_login, name="verify-2fa-login"),
     path("resend-2fa-code/", resend_2fa_code, name="resend-2fa-code"),
+
+    # Password Reset
+    path("password-reset/request/", request_password_reset, name="request-password-reset"),
+    path("password-reset/validate/", validate_reset_token, name="validate-reset-token"),
+    path("password-reset/confirm/", reset_password, name="reset-password"),
     
     # 2FA Management
     path("enable-2fa/", enable_2fa, name="enable-2fa"),

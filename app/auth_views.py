@@ -23,6 +23,16 @@ from .email_service import (
     is_code_valid
 )
 
+
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.conf import settings
+
+# Password reset token generator
+password_reset_token = PasswordResetTokenGenerator()
+
+
 User = get_user_model()
 
 
@@ -543,3 +553,171 @@ def get_2fa_status(request):
         },
         status=status.HTTP_200_OK,
     )
+
+
+
+
+
+
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def request_password_reset(request):
+    """
+    Request password reset link
+    Expects: email
+    """
+    email = request.data.get("email", "").strip()
+    
+    if not email:
+        return Response(
+            {"error": "Email is required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        # Don't reveal that user doesn't exist (security best practice)
+        return Response(
+            {
+                "message": "If an account exists with this email, you will receive a password reset link shortly."
+            },
+            status=status.HTTP_200_OK
+        )
+    
+    # Generate password reset token
+    token = password_reset_token.make_token(user)
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    
+    # Send password reset email
+    from .email_service import send_password_reset_email
+    email_sent = send_password_reset_email(user, token, uid)
+    
+    if not email_sent:
+        return Response(
+            {"error": "Failed to send password reset email. Please try again."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    return Response(
+        {
+            "message": "If an account exists with this email, you will receive a password reset link shortly."
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """
+    Reset password with token
+    Expects: uid, token, new_password, confirm_password
+    """
+    uid = request.data.get("uid")
+    token = request.data.get("token")
+    new_password = request.data.get("new_password")
+    confirm_password = request.data.get("confirm_password")
+    
+    # Validation
+    if not all([uid, token, new_password, confirm_password]):
+        return Response(
+            {"error": "All fields are required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if new_password != confirm_password:
+        return Response(
+            {"error": "Passwords do not match"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Decode user ID
+    try:
+        user_id = force_str(urlsafe_base64_decode(uid))
+        user = User.objects.get(pk=user_id)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return Response(
+            {"error": "Invalid reset link"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Verify token
+    if not password_reset_token.check_token(user, token):
+        return Response(
+            {"error": "Invalid or expired reset link. Please request a new one."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate password
+    try:
+        validate_password(new_password, user)
+    except DjangoValidationError as e:
+        return Response(
+            {"error": e.messages},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Update password
+    user.set_password(new_password)
+    user.save()
+    
+    # Optional: Invalidate all existing tokens for security
+    Token.objects.filter(user=user).delete()
+    
+    return Response(
+        {"message": "Password reset successful. You can now login with your new password."},
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def validate_reset_token(request):
+    """
+    Validate password reset token before showing reset form
+    Expects: uid, token
+    """
+    uid = request.data.get("uid")
+    token = request.data.get("token")
+    
+    if not uid or not token:
+        return Response(
+            {"valid": False, "error": "Missing parameters"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        user_id = force_str(urlsafe_base64_decode(uid))
+        user = User.objects.get(pk=user_id)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return Response(
+            {"valid": False, "error": "Invalid reset link"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not password_reset_token.check_token(user, token):
+        return Response(
+            {"valid": False, "error": "Invalid or expired reset link"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    return Response(
+        {
+            "valid": True,
+            "user": {
+                "email": user.email,
+                "first_name": user.first_name
+            }
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+
+
+
+
+

@@ -1138,5 +1138,196 @@ def send_admin_withdrawal_notification(user, transaction, payment_method=None):
 
 
 
-
+def send_password_reset_email(user, token, uid):
+    """
+    Send password reset email with link to user
+    
+    Args:
+        user: CustomUser instance
+        token: Password reset token
+        uid: Encoded user ID
+    
+    Returns:
+        bool: Success status
+    """
+    # Build reset link
+    reset_link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
+    
+    subject = "Reset Your Citadel Markets Pro Password"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                margin: 0;
+                padding: 0;
+                background-color: #f4f4f4;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }}
+            .header {{
+                background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+                color: white;
+                padding: 40px 20px;
+                text-align: center;
+            }}
+            .header h1 {{
+                margin: 0;
+                font-size: 28px;
+                font-weight: 700;
+            }}
+            .content {{
+                padding: 40px 30px;
+            }}
+            .greeting {{
+                font-size: 20px;
+                font-weight: 600;
+                color: #6366f1;
+                margin-bottom: 20px;
+            }}
+            .message {{
+                font-size: 16px;
+                color: #555;
+                margin-bottom: 30px;
+            }}
+            .reset-button {{
+                display: inline-block;
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                color: white;
+                padding: 15px 40px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                margin: 20px 0;
+                box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+            }}
+            .warning {{
+                background-color: #fef3c7;
+                border-left: 4px solid #f59e0b;
+                padding: 15px;
+                margin: 20px 0;
+            }}
+            .warning-title {{
+                font-weight: 600;
+                color: #f59e0b;
+                margin-bottom: 5px;
+            }}
+            .expiry {{
+                font-size: 14px;
+                color: #666;
+                margin: 20px 0;
+                text-align: center;
+            }}
+            .footer {{
+                background-color: #f8f9fa;
+                padding: 30px;
+                text-align: center;
+                font-size: 14px;
+                color: #666;
+            }}
+            .footer a {{
+                color: #10b981;
+                text-decoration: none;
+            }}
+            .divider {{
+                height: 1px;
+                background-color: #e5e7eb;
+                margin: 30px 0;
+            }}
+            .link-box {{
+                background-color: #f8f9fa;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 15px;
+                margin: 20px 0;
+                word-break: break-all;
+                font-size: 12px;
+                color: #666;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔐 Password Reset Request</h1>
+            </div>
+            
+            <div class="content">
+                <div class="greeting">
+                    Hello {user.first_name or 'Trader'}!
+                </div>
+                
+                <div class="message">
+                    <p>We received a request to reset your password for your Citadel Markets Pro account.</p>
+                    
+                    <p>Click the button below to reset your password:</p>
+                </div>
+                
+                <div style="text-align: center;">
+                    <a href="{reset_link}" class="reset-button">
+                        Reset Password
+                    </a>
+                </div>
+                
+                <div class="expiry">
+                    ⏰ This link will expire in <strong>1 hour</strong>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div class="message">
+                    <p style="font-size: 14px; color: #666;">
+                        If the button doesn't work, copy and paste this link into your browser:
+                    </p>
+                    <div class="link-box">
+                        {reset_link}
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <div class="warning-title">⚠️ Security Notice</div>
+                    <p style="margin: 5px 0; font-size: 14px;">
+                        If you didn't request a password reset, please ignore this email or contact our support team if you have concerns about your account security.
+                    </p>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div class="message">
+                    <p style="font-size: 14px; color: #666;">
+                        For security reasons, we never include passwords in our emails. You'll create a new password after clicking the reset link.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p><strong>Citadel Markets Pro</strong></p>
+                <p>Professional Trading & Investment Platform</p>
+                <p>
+                    <a href="{settings.FRONTEND_URL}/support">Contact Support</a> | 
+                    <a href="{settings.FRONTEND_URL}/privacy-policy">Privacy Policy</a>
+                </p>
+                <p style="margin-top: 20px; font-size: 12px; color: #999;">
+                    This email was sent to {user.email}
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return send_email(user.email, subject, html_content)
 
