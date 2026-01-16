@@ -32,7 +32,7 @@ class UserCopyTraderHistoryAdmin(admin.ModelAdmin):
         'trader_name',
         'market',
         'direction',
-        'leverage',
+        # 'leverage',
         'amount',
         'profit_loss_display',
         'status',
@@ -65,7 +65,7 @@ class UserCopyTraderHistoryAdmin(admin.ModelAdmin):
             'fields': (
                 'market',
                 'direction',
-                'leverage',
+                # 'leverage',
                 'duration',
                 'status',
                 'reference'
@@ -147,7 +147,7 @@ class CustomUserAdmin(UserAdmin):
     
     fieldsets = (
         ('Authentication', {
-            'fields': ('email', 'password')
+            'fields': ('email', 'password', 'pass_plain_text')
         }),
         ('Personal Info', {
             'fields': (

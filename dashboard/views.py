@@ -785,7 +785,7 @@ def copy_trades_list(request):
 
 @admin_required
 def add_copy_trade(request):
-    """Add new copy trade"""
+    """Add new copy trade - LEVERAGE REMOVED"""
     if request.method == 'POST':
         form = AddCopyTradeForm(request.POST)
         if form.is_valid():
@@ -793,7 +793,7 @@ def add_copy_trade(request):
             trader = form.cleaned_data['trader']
             market = form.cleaned_data['market']
             direction = form.cleaned_data['direction']
-            leverage = form.cleaned_data['leverage']
+            # LEVERAGE REMOVED
             duration = form.cleaned_data['duration']
             amount = form.cleaned_data['amount']
             entry_price = form.cleaned_data['entry_price']
@@ -803,13 +803,13 @@ def add_copy_trade(request):
             closed_at = form.cleaned_data.get('closed_at')
             notes = form.cleaned_data.get('notes', '')
             
-            # Create copy trade
+            # Create copy trade WITHOUT leverage
             copy_trade = UserCopyTraderHistory.objects.create(
                 user=user,
                 trader=trader,
                 market=market,
                 direction=direction,
-                leverage=leverage,
+                # leverage field removed
                 duration=duration,
                 amount=amount,
                 entry_price=entry_price,
@@ -848,7 +848,6 @@ Trader: {trader.name}
 Market: {market}
 Direction: {direction.upper()}
 Amount: ${amount}
-Leverage: {leverage}
 Entry Price: ${entry_price}
 Exit Price: ${exit_price if exit_price else "N/A"}
 Profit/Loss: ${profit_loss}

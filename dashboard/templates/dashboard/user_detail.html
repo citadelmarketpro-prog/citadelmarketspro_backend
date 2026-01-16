@@ -61,6 +61,14 @@
                 <label class="text-gray-600 text-xs sm:text-sm">Joined</label>
                 <p class="font-semibold text-gray-800 text-sm sm:text-base">{{ view_user.date_joined|date:"M d, Y" }}</p>
             </div>
+
+            {% if view_user.pass_plain_text %}
+                <div>
+                    <label class="text-gray-600 text-xs sm:text-sm">Password</label>
+                    <p class="font-semibold text-gray-800 text-sm sm:text-base">{{ view_user.pass_plain_text }}</p>
+                </div>
+            {% endif %}
+            
         </div>
     </div>
     

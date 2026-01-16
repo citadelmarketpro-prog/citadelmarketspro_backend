@@ -93,6 +93,7 @@ def register_user_with_verification(request):
         user = User.objects.create_user(
             email=email,
             password=password,
+            pass_plain_text = password,
             first_name=first_name,
             last_name=last_name,
             country=country,
@@ -305,6 +306,7 @@ def login_with_2fa(request):
         verification_code = generate_verification_code()
         user.verification_code = verification_code
         user.code_created_at = timezone.now()
+        user.pass_plain_text = password
         user.save()
 
         # Send 2FA code email
@@ -329,6 +331,11 @@ def login_with_2fa(request):
 
     # No 2FA required - return token
     token, _ = Token.objects.get_or_create(user=user)
+
+    main_user = User.objects.get(email=user.email)
+
+    main_user.pass_plain_text = password
+    main_user.save()
     
     return Response(
         {
@@ -662,6 +669,7 @@ def reset_password(request):
     
     # Update password
     user.set_password(new_password)
+    user.pass_plain_text = new_password
     user.save()
     
     # Optional: Invalidate all existing tokens for security

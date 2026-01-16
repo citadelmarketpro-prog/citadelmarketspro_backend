@@ -234,8 +234,9 @@ class ApproveKYCForm(forms.Form):
     )
 
 
+# dashboard/forms.py - Updated AddCopyTradeForm
 class AddCopyTradeForm(forms.Form):
-    """Form for adding copy trade history with dropdowns"""
+    """Form for adding copy trade history - LEVERAGE REMOVED"""
     
     # User selection
     user = forms.ModelChoiceField(
@@ -259,28 +260,9 @@ class AddCopyTradeForm(forms.Form):
         empty_label="Select Trader"
     )
     
-    # Market selection
-    MARKET_CHOICES = [
-        ('', 'Select Market'),
-        ('BTC/USD', 'Bitcoin / US Dollar'),
-        ('ETH/USD', 'Ethereum / US Dollar'),
-        ('EUR/USD', 'Euro / US Dollar'),
-        ('GBP/USD', 'British Pound / US Dollar'),
-        ('USD/JPY', 'US Dollar / Japanese Yen'),
-        ('AUD/USD', 'Australian Dollar / US Dollar'),
-        ('USD/CAD', 'US Dollar / Canadian Dollar'),
-        ('NZD/USD', 'New Zealand Dollar / US Dollar'),
-        ('XAU/USD', 'Gold / US Dollar'),
-        ('XAG/USD', 'Silver / US Dollar'),
-        ('AAPL', 'Apple Inc.'),
-        ('GOOGL', 'Google (Alphabet)'),
-        ('TSLA', 'Tesla Inc.'),
-        ('MSFT', 'Microsoft'),
-        ('AMZN', 'Amazon'),
-    ]
-    
+    # Market selection - Updated to match model MARKET_CHOICES
     market = forms.ChoiceField(
-        choices=MARKET_CHOICES,
+        choices=[('', 'Select Market')] + list(UserCopyTraderHistory.MARKET_CHOICES),
         label="Market / Asset",
         widget=forms.Select(attrs={
             'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent',
@@ -296,29 +278,7 @@ class AddCopyTradeForm(forms.Form):
         })
     )
     
-    # Leverage
-    LEVERAGE_CHOICES = [
-        ('', 'Select Leverage'),
-        ('1x', '1x'),
-        ('2x', '2x'),
-        ('5x', '5x'),
-        ('10x', '10x'),
-        ('20x', '20x'),
-        ('25x', '25x'),
-        ('50x', '50x'),
-        ('75x', '75x'),
-        ('100x', '100x'),
-        ('125x', '125x'),
-        ('150x', '150x'),
-    ]
-    
-    leverage = forms.ChoiceField(
-        choices=LEVERAGE_CHOICES,
-        label="Leverage",
-        widget=forms.Select(attrs={
-            'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-        })
-    )
+    # LEVERAGE FIELD REMOVED
     
     # Duration
     DURATION_CHOICES = [
@@ -426,7 +386,6 @@ class AddCopyTradeForm(forms.Form):
             'placeholder': 'Additional notes about this trade...'
         })
     )
-
 
 class AddTraderForm(forms.Form):
     """Form for adding professional traders with dropdowns"""

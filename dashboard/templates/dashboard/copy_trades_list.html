@@ -116,19 +116,26 @@
                         </div>
                     </td>
                     
-                    <!-- Trade Info -->
+                    <!-- Trade Info - LEVERAGE REMOVED -->
                     <td class="px-4 md:px-6 py-4">
                         <div class="space-y-1">
-                            <div class="text-sm md:text-base font-bold text-gray-900">
-                                {{ trade.market }}
+                            <!-- Market Logo (if available) -->
+                            {% if trade.market_logo_url %}
+                            <div class="flex items-center space-x-2">
+                                <img src="{{ trade.market_logo_url }}" alt="{{ trade.market }}" class="h-6 w-6 rounded-full object-cover">
+                                <span class="text-sm md:text-base font-bold text-gray-900">{{ trade.market_name }}</span>
                             </div>
+                            {% else %}
+                            <div class="text-sm md:text-base font-bold text-gray-900">
+                                {{ trade.market_name }}
+                            </div>
+                            {% endif %}
                             <div class="flex items-center space-x-2">
                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
                                     {% if trade.direction == 'buy' %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
                                     <i class="fas fa-arrow-{% if trade.direction == 'buy' %}up{% else %}down{% endif %} mr-1"></i>
                                     {{ trade.direction|upper }}
                                 </span>
-                                <span class="text-xs text-gray-600">{{ trade.leverage }}</span>
                             </div>
                             <div class="text-xs text-gray-500">
                                 Amount: ${{ trade.amount|floatformat:2 }}

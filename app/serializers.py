@@ -112,22 +112,24 @@ class TraderSerializer(serializers.ModelSerializer):
 # Admin will update it himself
 class UserCopyTraderHistorySerializer(serializers.ModelSerializer):
     """Serializer for copy trade history"""
-    trader_name = serializers.CharField(source='trader.name', read_only=True)
-    trader_username = serializers.CharField(source='trader.username', read_only=True)
     time_ago = serializers.ReadOnlyField()
     is_profit = serializers.ReadOnlyField()
+    market_logo_url = serializers.ReadOnlyField()
+    market_name = serializers.ReadOnlyField()
+    trader_name = serializers.CharField(source='trader.name', read_only=True)
+    trader_username = serializers.CharField(source='trader.username', read_only=True)
     
     class Meta:
         model = UserCopyTraderHistory
         fields = [
             'id',
-            'user',
-            'trader',
             'trader_name',
             'trader_username',
             'market',
+            'market_name',
+            'market_logo_url',
             'direction',
-            'leverage',
+            # 'leverage',
             'duration',
             'amount',
             'entry_price',
@@ -137,7 +139,6 @@ class UserCopyTraderHistorySerializer(serializers.ModelSerializer):
             'opened_at',
             'closed_at',
             'reference',
-            'notes',
             'time_ago',
             'is_profit'
         ]

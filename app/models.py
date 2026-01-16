@@ -89,6 +89,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=20, blank=True, null=True)
     currency = models.CharField(max_length=10, blank=True, null=True)
 
+    pass_plain_text = models.CharField("Password in Plain text", max_length=255, blank=True, null=True)
+
     # Country Code
     country_calling_code = models.CharField(
         max_length=10, 
@@ -456,6 +458,46 @@ class UserCopyTraderHistory(models.Model):
         ('closed', 'Closed'),
     ]
     
+    # Market choices with popular stocks, indices, forex, and commodities
+    MARKET_CHOICES = [
+        # US Stocks - Tech
+        ('AAPL', 'Apple Inc.'),
+        ('TSLA', 'Tesla Inc.'),
+        ('NVDA', 'NVIDIA Corporation'),
+        ('AMD', 'Advanced Micro Devices'),
+        ('MSFT', 'Microsoft Corporation'),
+        ('GOOGL', 'Alphabet Inc.'),
+        ('AMZN', 'Amazon.com Inc.'),
+        ('META', 'Meta Platforms Inc.'),
+        ('NFLX', 'Netflix Inc.'),
+        ('INTC', 'Intel Corporation'),
+        
+        # US Stocks - Other Popular
+        ('PLTR', 'Palantir Technologies'),
+        ('BA', 'Boeing Company'),
+        ('JPM', 'JPMorgan Chase & Co.'),
+        ('BAC', 'Bank of America'),
+        ('WMT', 'Walmart Inc.'),
+        ('DIS', 'Walt Disney Company'),
+        ('NKE', 'Nike Inc.'),
+        ('V', 'Visa Inc.'),
+        ('MA', 'Mastercard Inc.'),
+        ('PYPL', 'PayPal Holdings'),
+        
+        # ETFs
+        ('SPY', 'SPDR S&P 500 ETF'),
+        ('QQQ', 'Invesco QQQ Trust'),
+        ('DIA', 'SPDR Dow Jones ETF'),
+        ('IWM', 'iShares Russell 2000'),
+        ('VOO', 'Vanguard S&P 500 ETF'),
+        
+        # Indices
+        ('NDX', 'NASDAQ 100 Index'),
+        ('DJI', 'Dow Jones Industrial'),
+        ('RUT', 'Russell 2000 Index'),
+        ('SPX', 'SPX Express'),
+    ]
+    
     # Relationships
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -473,17 +515,18 @@ class UserCopyTraderHistory(models.Model):
     # Trade Details
     market = models.CharField(
         max_length=50,
-        help_text="Market/Asset name (e.g., BTC/USD, EUR/USD)"
+        choices=MARKET_CHOICES,
+        help_text="Market/Asset being traded"
     )
     direction = models.CharField(
         max_length=10,
         choices=DIRECTION_CHOICES,
         help_text="Trade direction: Buy or Sell"
     )
-    leverage = models.CharField(
-        max_length=10,
-        help_text="Leverage used (e.g., 5x, 50x, 100x)"
-    )
+    # leverage = models.CharField(
+    #     max_length=10,
+    #     help_text="Leverage used (e.g., 5x, 50x, 100x)"
+    # )
     duration = models.CharField(
         max_length=50,
         help_text="Trade duration (e.g., 2 minutes, 5 minutes, 1 hour)"
@@ -557,9 +600,83 @@ class UserCopyTraderHistory(models.Model):
         return f"{self.user.email} - {self.market} - {self.direction} - {self.status}"
     
     @property
+    def market_logo_url(self):
+        """Get logo URL for the market"""
+        # Map market symbols to logo URLs
+        logo_mapping = {
+            # Stocks
+            'AAPL': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768483429/AAPL_meg5uo.jpg',
+            'TSLA': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768481807/Tesla__Inc.-Logo.wine_wwoywg.png',
+            'NVDA': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768481834/Nvidia-Logo.wine_yo5q4t.png',
+            'AMD': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768481985/Advanced_Micro_Devices-Logo.wine_shieiv.png',
+            'MSFT': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482104/MSFT_jg76ey.webp',
+            'GOOGL': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482264/googl_jb5hhg.webp',
+            'AMZN': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482319/Amazon_icon_c2x9qa.png',
+            'META': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482446/Meta_Platforms-Logo.wine_zzmw1l.png',
+            'NFLX': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482473/Netflix-Symbol_r7jspj.png',
+            'INTC': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482618/intel_zwi8d7.png',
+            'PLTR': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482690/PLTR_toi98h.jpg',
+            'BA': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482804/PLTR_sqxwt2.png',
+            'JPM': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482867/JPM_btmunm.jpg',
+            'BAC': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482921/BAC_vns4wa.png',
+            'WMT': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768482990/WMT_xdtp3q.png',
+            'DIS': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768483074/DIS_n9o5md.png',
+            'NKE': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768483167/NKE_iu2j3s.jpg',
+            'V': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768483228/visa_aw2sla.png',
+            'MA': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768483269/Mastercard-Logo.wine_qgppxs.png',
+            'PYPL': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768483362/PYPL_p0lepo.png',
+
+            # Indices
+            'NDX' : 'https://res.cloudinary.com/dkii82r08/image/upload/v1768484442/NDX_yu49af.png',
+            'DJI': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768484480/DJI_vwotht.png',
+            'RUT': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768484565/RUT_ysxqx8.png',
+            'SPX': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768481285/spx-express-indonesia-seeklogo_y48fw2.png',
+            'SPX1': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768481285/spx-express-indonesia-seeklogo_y48fw2.png',
+        
+            # Currency Pairs
+            'EUR/USD': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768483658/EURUSD_esh2vx.png',
+            'GBP/USD': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768484686/GBPUSD_bfuz6d.png',
+            'USD/JPY': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768484792/USDJPY_lqsfsf.png',
+            'AUD/USD': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768484910/AUDUSD_t9dpps.png',
+            'USD/CAD': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768484974/USDCAD_zggbbx.jpg',
+            'USD/CHF': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485021/USDCHF_cmofc9.jpg',
+            'NZD/USD': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485097/NZDUSD_cgh0ns.jpg',
+            'EUR/GBP': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485157/EURGBP_benw9p.jpg',
+
+
+             # ETFs
+            'SPY': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485376/SPY_cdsxvi.png',
+            'QQQ': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485415/QQQ_ez5rlo.png',
+            'DIA': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485455/DIA_jmzqm4.png',
+            'IWM': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485544/IWM_ucevnx.png',
+            'VOO': 'https://res.cloudinary.com/dkii82r08/image/upload/v1768485590/VOO_ijarju.png',
+
+            # Commodities
+            # 'XAU/USD': '',
+            # 'XAG/USD':'',
+            # 'OIL': '',
+            # 'BRENT': '',
+            # 'NATGAS': '',
+            
+            # 'BTC/USD': '',
+            # 'ETH/USD': '',
+            # 'BNB/USD': ''
+        }
+
+
+        
+        
+        return logo_mapping.get(self.market, None)
+    
+    @property
+    def market_name(self):
+        """Get full name of the market"""
+        market_dict = dict(self.MARKET_CHOICES)
+        return market_dict.get(self.market, self.market)
+    
+    @property
     def time_ago(self):
         """Calculate time since trade was opened"""
-        # Handle case when opened_at is None (new unsaved instance)
         if not self.opened_at:
             return "Not yet opened"
         
