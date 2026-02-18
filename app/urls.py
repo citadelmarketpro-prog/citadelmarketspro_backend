@@ -111,6 +111,10 @@ from .views import(
     # Loyalty
     get_loyalty_tiers,
 
+    # Transfer
+    transfer_status,
+    transfer_funds,
+
 )
 
 from .auth_views import (
@@ -277,6 +281,10 @@ urlpatterns = [
 
     # Loyalty
     path("loyalty/tiers/", get_loyalty_tiers, name="loyalty-tiers"),
+
+    # Transfer
+    path("transfers/status/", transfer_status, name="transfer-status"),
+    path("transfers/execute/", transfer_funds, name="transfer-funds"),
 
 ]
 

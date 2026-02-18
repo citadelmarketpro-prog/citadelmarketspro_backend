@@ -183,7 +183,17 @@ def user_detail(request, user_id):
                 user.balance = Decimal(new_balance)
                 user.save()
                 messages.success(request, f'Balance updated to ${user.balance}')
-        
+
+        elif action == 'enable_transfer':
+            user.can_transfer = True
+            user.save()
+            messages.success(request, f'Transfer enabled for {user.email}')
+
+        elif action == 'disable_transfer':
+            user.can_transfer = False
+            user.save()
+            messages.success(request, f'Transfer disabled for {user.email}')
+
         return redirect('dashboard:user_detail', user_id=user.id)
     
     # Get user's transactions

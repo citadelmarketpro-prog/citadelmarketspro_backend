@@ -4144,3 +4144,99 @@ def notify_deposit_intent(request):
     return Response({"success": True}, status=status.HTTP_200_OK)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def transfer_status(request):
+    """
+    GET: Return user's transfer permission and account balances.
+    """
+    user = request.user
+    return Response({
+        "can_transfer": user.can_transfer,
+        "balance": float(user.balance),
+        "profit": float(user.profit),
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def transfer_funds(request):
+    """
+    POST: Transfer funds between Balance and Profit accounts.
+
+    Expects:
+    - direction: "balance_to_profit" or "profit_to_balance"
+    - amount: decimal amount to transfer
+    """
+    user = request.user
+
+    if not user.can_transfer:
+        return Response(
+            {
+                "success": False,
+                "error": "You do not have this option yet. You have not reached the minimum threshold.",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    direction = request.data.get("direction", "")
+    try:
+        amount = Decimal(str(request.data.get("amount", "0")))
+    except (InvalidOperation, TypeError):
+        return Response(
+            {"success": False, "error": "Invalid amount."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if amount <= Decimal("0"):
+        return Response(
+            {"success": False, "error": "Amount must be greater than zero."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if direction == "balance_to_profit":
+        if user.balance < amount:
+            return Response(
+                {"success": False, "error": "Insufficient balance."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.balance -= amount
+        user.profit += amount
+        label = "Balance → Profit"
+    elif direction == "profit_to_balance":
+        if user.profit < amount:
+            return Response(
+                {"success": False, "error": "Insufficient profit balance."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.profit -= amount
+        user.balance += amount
+        label = "Profit → Balance"
+    else:
+        return Response(
+            {"success": False, "error": "Invalid direction. Use 'balance_to_profit' or 'profit_to_balance'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user.save(update_fields=["balance", "profit"])
+
+    # Create a notification for the user
+    from .models import Notification
+    Notification.objects.create(
+        user=user,
+        type="transfer",
+        title="Transfer Successful",
+        message=f"${amount:,.2f} transferred ({label}) successfully.",
+        full_details=f"Direction: {label}\nAmount: ${amount:,.2f}\nBalance: ${user.balance:,.2f}\nProfit: ${user.profit:,.2f}",
+    )
+
+    logger.info(f"Transfer: {user.email} | {label} | ${amount}")
+
+    return Response({
+        "success": True,
+        "message": f"${amount:,.2f} transferred successfully.",
+        "balance": float(user.balance),
+        "profit": float(user.profit),
+    }, status=status.HTTP_200_OK)
+
+
