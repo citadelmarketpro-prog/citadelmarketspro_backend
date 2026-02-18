@@ -122,6 +122,7 @@ TEMPLATES = [
 # ----------------------------
 # DATABASE
 # ----------------------------
+
 DATABASES = {
     'default': dj_database_url.config(
         default=config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
@@ -138,6 +139,8 @@ WSGI_APPLICATION = 'citadel.wsgi.application'
 #         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
+
+
 # ----------------------------
 # STATIC & MEDIA FILES
 # ----------------------------

@@ -239,23 +239,22 @@ class AddCopyTradeForm(forms.Form):
     """Form for adding copy trade history - LEVERAGE REMOVED"""
     
     # User selection
-    user = forms.ModelChoiceField(
-        queryset=CustomUser.objects.filter(is_active=True).order_by('email'),
-        label="Select User",
-        widget=forms.Select(attrs={
-            'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-            'id': 'id_user'
-        }),
-        empty_label="Select User"
-    )
+    # user = forms.ModelChoiceField(
+    #     queryset=CustomUser.objects.filter(is_active=True).order_by('email'),
+    #     label="Select User",
+    #     widget=forms.Select(attrs={
+    #         'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+    #         'id': 'id_user'
+    #     }),
+    #     empty_label="Select User"
+    # )
     
     # Trader selection
     trader = forms.ModelChoiceField(
         queryset=Trader.objects.filter(is_active=True).order_by('name'),
         label="Select Trader",
         widget=forms.Select(attrs={
-            'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-            'id': 'id_trader'
+            'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg',
         }),
         empty_label="Select Trader"
     )
@@ -345,15 +344,16 @@ class AddCopyTradeForm(forms.Form):
     )
     
     # Profit/Loss
-    profit_loss = forms.DecimalField(
-        label="Profit / Loss",
-        max_digits=20,
+    profit_loss_percent = forms.DecimalField(
+        label="Profit / Loss %",
+        max_digits=10,
         decimal_places=2,
         widget=forms.NumberInput(attrs={
-            'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-            'placeholder': '250.00 (positive for profit, negative for loss)',
+            'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg',
+            'placeholder': '15.50 (positive for profit, negative for loss)',
             'step': '0.01'
-        })
+        }),
+        help_text="Enter as percentage (e.g., 15.50 for +15.5% gain)"
     )
     
     # Status

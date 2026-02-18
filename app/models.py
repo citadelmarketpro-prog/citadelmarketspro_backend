@@ -51,9 +51,26 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     # Loyalty Status
     LOYALTY_TIERS = [
         ('iron', 'Iron'),
+        ('bronze', 'Bronze'),
         ('silver', 'Silver'),
         ('gold', 'Gold'),
+        ('platinum', 'Platinum'),
+        ('diamond', 'Diamond'),
+        ('elite', 'Elite'),
     ]
+
+    # Ordered list for tier progression
+    LOYALTY_TIER_ORDER = ['iron', 'bronze', 'silver', 'gold', 'platinum', 'diamond', 'elite']
+
+    LOYALTY_TIER_CONFIG = {
+        'iron':     {'min_deposit': 2500,    'referral_bonus': 5,  'rank_bonus': 0},
+        'bronze':   {'min_deposit': 5000,    'referral_bonus': 5,  'rank_bonus': 50},
+        'silver':   {'min_deposit': 25000,   'referral_bonus': 10, 'rank_bonus': 250},
+        'gold':     {'min_deposit': 100000,  'referral_bonus': 10, 'rank_bonus': 1000},
+        'platinum': {'min_deposit': 250000,  'referral_bonus': 12, 'rank_bonus': 2500},
+        'diamond':  {'min_deposit': 500000,  'referral_bonus': 12, 'rank_bonus': 5000},
+        'elite':    {'min_deposit': 1000000, 'referral_bonus': 15, 'rank_bonus': 10000},
+    }
 
     # KYC Fields
     id_type = models.CharField(
@@ -113,7 +130,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     next_loyalty_status = models.CharField(
         max_length=20,
         choices=LOYALTY_TIERS,
-        default='silver',
+        default='bronze',
         help_text="Next loyalty tier"
     )
 
@@ -175,6 +192,76 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []  # Email & Password are required by default
     
+    def update_loyalty_tier(self):
+        """
+        Check user's total completed deposits and upgrade loyalty tier if eligible.
+        Credits rank bonus difference to balance on upgrade.
+        Returns True if an upgrade occurred.
+        """
+        from django.db.models import Sum
+
+        total_deposits = Transaction.objects.filter(
+            user=self,
+            transaction_type='deposit',
+            status='completed'
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+        # Determine the highest tier the user qualifies for
+        new_tier = 'iron'
+        for tier_key in self.LOYALTY_TIER_ORDER:
+            if total_deposits >= self.LOYALTY_TIER_CONFIG[tier_key]['min_deposit']:
+                new_tier = tier_key
+
+        old_tier = self.current_loyalty_status
+        if old_tier == new_tier:
+            return False
+
+        # Only upgrade, never downgrade
+        old_index = self.LOYALTY_TIER_ORDER.index(old_tier) if old_tier in self.LOYALTY_TIER_ORDER else 0
+        new_index = self.LOYALTY_TIER_ORDER.index(new_tier)
+        if new_index <= old_index:
+            return False
+
+        # Calculate rank bonus difference
+        old_rank_bonus = Decimal(str(self.LOYALTY_TIER_CONFIG.get(old_tier, {}).get('rank_bonus', 0)))
+        new_rank_bonus = Decimal(str(self.LOYALTY_TIER_CONFIG[new_tier]['rank_bonus']))
+        bonus_credit = new_rank_bonus - old_rank_bonus
+
+        # Update tier fields
+        self.current_loyalty_status = new_tier
+
+        # Set next tier
+        if new_index < len(self.LOYALTY_TIER_ORDER) - 1:
+            next_tier = self.LOYALTY_TIER_ORDER[new_index + 1]
+            self.next_loyalty_status = next_tier
+            self.next_amount_to_upgrade = Decimal(str(self.LOYALTY_TIER_CONFIG[next_tier]['min_deposit']))
+        else:
+            # Already at highest tier
+            self.next_loyalty_status = new_tier
+            self.next_amount_to_upgrade = Decimal('0.00')
+
+        # Credit rank bonus
+        if bonus_credit > 0:
+            self.balance += bonus_credit
+
+        self.save()
+
+        # Create upgrade notification
+        Notification.objects.create(
+            user=self,
+            type='alert',
+            title='Loyalty Rank Upgraded!',
+            message=f'Congratulations! You have been upgraded to {new_tier.capitalize()} tier.',
+            full_details=(
+                f'Previous Tier: {old_tier.capitalize()}\n'
+                f'New Tier: {new_tier.capitalize()}\n'
+                f'Rank Bonus Credited: ${bonus_credit:.2f}\n'
+                f'Total Deposits: ${total_deposits:.2f}'
+            )
+        )
+
+        return True
+
     class Meta:
         verbose_name_plural = "Users"
         verbose_name = "User"
@@ -499,18 +586,19 @@ class UserCopyTraderHistory(models.Model):
     ]
     
     # Relationships
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='copy_trade_history',
-        help_text="User who made this copy trade"
-    )
+    # user = models.ForeignKey(
+    #     settings.AUTH_USER_MODEL,
+    #     on_delete=models.CASCADE,
+    #     related_name='copy_trade_history',
+    #     help_text="User who made this copy trade"
+    # )
     trader = models.ForeignKey(
         Trader,
         on_delete=models.CASCADE,
-        related_name='copy_trade_history',
-        help_text="Trader being copied"
+        related_name='trade_history',
+        help_text="Trader who executed this trade"
     )
+    
     
     # Trade Details
     market = models.CharField(
@@ -523,20 +611,16 @@ class UserCopyTraderHistory(models.Model):
         choices=DIRECTION_CHOICES,
         help_text="Trade direction: Buy or Sell"
     )
-    # leverage = models.CharField(
-    #     max_length=10,
-    #     help_text="Leverage used (e.g., 5x, 50x, 100x)"
-    # )
     duration = models.CharField(
         max_length=50,
         help_text="Trade duration (e.g., 2 minutes, 5 minutes, 1 hour)"
     )
-    
+
     # Financial Details
     amount = models.DecimalField(
         max_digits=20,
         decimal_places=8,
-        help_text="Amount invested in base currency"
+        help_text="Base amount invested"
     )
     entry_price = models.DecimalField(
         max_digits=20,
@@ -550,11 +634,11 @@ class UserCopyTraderHistory(models.Model):
         blank=True,
         help_text="Exit price (for closed trades)"
     )
-    profit_loss = models.DecimalField(
-        max_digits=20,
+    profit_loss_percent = models.DecimalField(
+        max_digits=10,
         decimal_places=2,
         default=0.00,
-        help_text="Profit or loss from this trade"
+        help_text="Profit or loss percentage"
     )
     
     # Status & Timestamps
@@ -587,17 +671,22 @@ class UserCopyTraderHistory(models.Model):
     )
     
     class Meta:
-        verbose_name = "Copy Trade History"
-        verbose_name_plural = "Copy Trade Histories"
+        verbose_name = "Trader Trade History"
+        verbose_name_plural = "Trader Trade Histories"
         ordering = ["-opened_at"]
         indexes = [
-            models.Index(fields=['user', '-opened_at']),
             models.Index(fields=['trader', '-opened_at']),
             models.Index(fields=['status']),
         ]
     
     def __str__(self):
-        return f"{self.user.email} - {self.market} - {self.direction} - {self.status}"
+        return f"{self.trader.name} - {self.market} - {self.direction} - {self.status}"
+    
+    def calculate_user_profit_loss(self, user_investment_amount):
+        """Calculate P/L for a specific user based on their investment amount"""
+        if self.profit_loss_percent:
+            return (Decimal(user_investment_amount) * self.profit_loss_percent) / Decimal('100')
+        return Decimal('0.00')
     
     @property
     def market_logo_url(self):
@@ -704,22 +793,20 @@ class UserCopyTraderHistory(models.Model):
     @property
     def is_profit(self):
         """Check if trade is profitable"""
-        return self.profit_loss > 0
+        return self.profit_loss_percent > 0
     
     def save(self, *args, **kwargs):
         """Auto-generate reference if not provided"""
         if not self.reference:
             from django.utils.crypto import get_random_string
-            self.reference = f"CPT-{get_random_string(12).upper()}"
+            self.reference = f"TRD-{get_random_string(12).upper()}"
         super().save(*args, **kwargs)
 
 
 
 class UserTraderCopy(models.Model):
-    """
-    Model to track users copying traders
-    Ensures no duplicate copy relationships and maintains copying state
-    """
+    """Model to track users copying traders - PERMANENT LOCK-IN"""
+    
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -736,10 +823,20 @@ class UserTraderCopy(models.Model):
         default=True,
         help_text="Whether user is currently actively copying this trader"
     )
-    minimum_amount_user_copied = models.DecimalField(
+    # ✅ Changed field name
+    initial_investment_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        help_text="Minimum threshold amount when user started copying"
+        default=0.00,  # ✅ ADD THIS
+        help_text="Amount user initially locked in with"
+    )
+    
+    # ✅ Changed field name
+    minimum_threshold_at_start = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0.00,  # ✅ ADD THIS
+        help_text="Trader's minimum threshold when user started copying (for reference only)"
     )
     started_copying_at = models.DateTimeField(
         auto_now_add=True,
@@ -752,14 +849,13 @@ class UserTraderCopy(models.Model):
     stopped_copying_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When the user stopped copying (if applicable)"
+        help_text="When the user manually stopped copying (if applicable)"
     )
     
     class Meta:
         verbose_name = "User Trader Copy"
         verbose_name_plural = "User Trader Copies"
         ordering = ["-started_copying_at"]
-        # Ensure one user can only have one copy relationship with a trader
         unique_together = ['user', 'trader']
         indexes = [
             models.Index(fields=['user', 'trader', 'is_actively_copying']),
@@ -771,50 +867,50 @@ class UserTraderCopy(models.Model):
         return f"{self.user.email} -> {self.trader.name} ({status})"
     
     def save(self, *args, **kwargs):
-        """
-        Override save to update stopped_copying_at timestamp
-        """
+        """Update stopped_copying_at timestamp only if manually stopped"""
         if not self.is_actively_copying and not self.stopped_copying_at:
             self.stopped_copying_at = timezone.now()
         elif self.is_actively_copying:
-            # If reactivating, clear the stopped timestamp
             self.stopped_copying_at = None
         super().save(*args, **kwargs)
 
-@receiver(pre_save, sender=Trader)
-def check_trader_threshold_change(sender, instance, **kwargs):
-    """
-    When admin changes trader's min_account_threshold,
-    automatically stop all active copies for users who no longer meet the threshold
-    """
-    if instance.pk:  # Only for existing traders
-        try:
-            old_trader = Trader.objects.get(pk=instance.pk)
-            # Check if min_account_threshold changed
-            if old_trader.min_account_threshold != instance.min_account_threshold:
-                # Get all active copies of this trader
-                active_copies = UserTraderCopy.objects.filter(
-                    trader=instance,
-                    is_actively_copying=True
-                )
+
+
+
+# @receiver(pre_save, sender=Trader)
+# def check_trader_threshold_change(sender, instance, **kwargs):
+#     """
+#     When admin changes trader's min_account_threshold,
+#     automatically stop all active copies for users who no longer meet the threshold
+#     """
+#     if instance.pk:  # Only for existing traders
+#         try:
+#             old_trader = Trader.objects.get(pk=instance.pk)
+#             # Check if min_account_threshold changed
+#             if old_trader.min_account_threshold != instance.min_account_threshold:
+#                 # Get all active copies of this trader
+#                 active_copies = UserTraderCopy.objects.filter(
+#                     trader=instance,
+#                     is_actively_copying=True
+#                 )
                 
-                # Deactivate copies where minimum changed
-                for copy_relation in active_copies:
-                    # Stop copying since threshold changed
-                    copy_relation.is_actively_copying = False
-                    copy_relation.stopped_copying_at = timezone.now()
-                    copy_relation.save()
+#                 # Deactivate copies where minimum changed
+#                 for copy_relation in active_copies:
+#                     # Stop copying since threshold changed
+#                     copy_relation.is_actively_copying = False
+#                     copy_relation.stopped_copying_at = timezone.now()
+#                     copy_relation.save()
                     
-                    # Create notification for user
-                    Notification.objects.create(
-                        user=copy_relation.user,
-                        type="alert",
-                        title="Copy Trading Stopped",
-                        message=f"Your copy of {instance.name} has been stopped due to minimum balance requirement change.",
-                        full_details=f"The minimum balance requirement for {instance.name} has changed from ${old_trader.min_account_threshold} to ${instance.min_account_threshold}. Your copy trading has been automatically stopped. Please review and copy again if you meet the new requirements.",
-                    )
-        except Trader.DoesNotExist:
-            pass
+#                     # Create notification for user
+#                     Notification.objects.create(
+#                         user=copy_relation.user,
+#                         type="alert",
+#                         title="Copy Trading Stopped",
+#                         message=f"Your copy of {instance.name} has been stopped due to minimum balance requirement change.",
+#                         full_details=f"The minimum balance requirement for {instance.name} has changed from ${old_trader.min_account_threshold} to ${instance.min_account_threshold}. Your copy trading has been automatically stopped. Please review and copy again if you meet the new requirements.",
+#                     )
+#         except Trader.DoesNotExist:
+#             pass
 
 class TraderPortfolio(models.Model):
     DIRECTION_CHOICES = [

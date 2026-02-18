@@ -115,35 +115,48 @@
         </div>
         
         <!-- Recent Copy Trades -->
-        {% if copy_trades %}
-        <div class="bg-white rounded-xl shadow-lg p-4 sm:p-5 md:p-6">
-            <h3 class="text-sm sm:text-base md:text-lg font-bold text-gray-800 mb-3 sm:mb-4 flex items-center">
-                <i class="fas fa-history mr-2 text-blue-600"></i>
-                Recent Copy Trades
-            </h3>
-            <div class="space-y-2 md:space-y-3">
-                {% for trade in copy_trades %}
-                <div class="flex items-center justify-between p-2.5 sm:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                    <div class="flex items-center min-w-0 flex-1">
-                        <div class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm mr-2 md:mr-3 flex-shrink-0">
-                            {{ trade.user.email|first|upper }}
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="text-xs sm:text-sm font-semibold text-gray-900 truncate">{{ trade.market }}</p>
-                            <p class="text-xs text-gray-600 truncate">{{ trade.user.email|truncatechars:25 }}</p>
-                        </div>
-                    </div>
-                    <div class="text-right ml-2 flex-shrink-0">
-                        <p class="text-xs sm:text-sm font-bold {% if trade.is_profit %}text-green-600{% else %}text-red-600{% endif %}">
-                            {% if trade.is_profit %}+{% endif %}${{ trade.profit_loss|floatformat:2 }}
-                        </p>
-                        <p class="text-xs text-gray-500">{{ trade.time_ago }}</p>
-                    </div>
+{% if copy_trades %}
+<div class="bg-white rounded-xl shadow-lg p-4 sm:p-5 md:p-6">
+    <h3 class="text-sm sm:text-base md:text-lg font-bold text-gray-800 mb-3 sm:mb-4 flex items-center">
+        <i class="fas fa-history mr-2 text-blue-600"></i>
+        Recent Trader Trades
+    </h3>
+    <div class="space-y-2 md:space-y-3">
+        {% for trade in copy_trades %}
+        <div class="flex items-center justify-between p-2.5 sm:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+            <div class="flex items-center min-w-0 flex-1">
+                <!-- Market Icon -->
+                <div class="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm mr-2 md:mr-3 flex-shrink-0">
+                    {{ trade.market|slice:":2"|upper }}
                 </div>
-                {% endfor %}
+                <div class="min-w-0 flex-1">
+                    <p class="text-xs sm:text-sm font-semibold text-gray-900 truncate">
+                        {{ trade.market_name }}
+                    </p>
+                    <p class="text-xs text-gray-600">
+                        {{ trade.direction|upper }} • {{ trade.status|capfirst }}
+                    </p>
+                </div>
+            </div>
+            <div class="text-right ml-2 flex-shrink-0">
+                <p class="text-xs sm:text-sm font-bold {% if trade.profit_loss_percent >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                    {% if trade.profit_loss_percent >= 0 %}+{% endif %}{{ trade.profit_loss_percent }}%
+                </p>
+                <p class="text-xs text-gray-500">{{ trade.time_ago }}</p>
             </div>
         </div>
-        {% endif %}
+        {% endfor %}
+    </div>
+    
+    <!-- View All Link -->
+    <div class="mt-4 text-center">
+        <a href="{% url 'dashboard:copy_trades_list' %}?trader={{ trader.id }}" 
+           class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+            View All Trades for {{ trader.name }} →
+        </a>
+    </div>
+</div>
+{% endif %}
     </div>
     
     <!-- Sidebar -->

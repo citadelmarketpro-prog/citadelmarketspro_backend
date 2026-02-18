@@ -91,6 +91,7 @@ from .email_service import (
     send_welcome_email,
     send_admin_deposit_notification,
     send_admin_withdrawal_notification,
+    send_admin_deposit_intent_notification,
 )
 
 from .permissions import IsEmailVerified
@@ -101,14 +102,12 @@ import logging
 
 
 
-
-
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
 
-
+# Close trade functionality giving errors
 
 
 @api_view(['GET'])
@@ -948,45 +947,33 @@ def trader_detail(request, pk):
 @authentication_classes([TokenAuthentication])
 def copy_trader_action(request):
     """
-    POST: Copy or cancel copying a trader
-    Expects:
-    - trader_id: ID of the trader
-    - action: 'copy' or 'cancel'
+    POST: Copy or cancel copying a trader - PERMANENT LOCK-IN
     """
     user = request.user
     
-    # Validate input
     serializer = UserTraderCopyCreateSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
-            {
-                "success": False,
-                "errors": serializer.errors
-            },
+            {"success": False, "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     trader_id = serializer.validated_data['trader_id']
     action = serializer.validated_data['action']
     
-    # Get trader
     try:
         trader = Trader.objects.get(id=trader_id, is_active=True)
     except Trader.DoesNotExist:
         return Response(
-            {
-                "success": False,
-                "error": "Trader not found or inactive"
-            },
+            {"success": False, "error": "Trader not found or inactive"},
             status=status.HTTP_404_NOT_FOUND
         )
     
-    # Check user balance against minimum threshold
     min_threshold = float(trader.min_account_threshold)
     user_balance = float(user.balance)
     
     if action == 'copy':
-        # Validate user has sufficient balance
+        # ✅ Validate user has sufficient balance (ONLY AT START)
         if user_balance < min_threshold:
             return Response(
                 {
@@ -1002,14 +989,14 @@ def copy_trader_action(request):
             trader=trader,
             defaults={
                 'is_actively_copying': True,
-                'minimum_amount_user_copied': trader.min_account_threshold
+                'initial_investment_amount': min_threshold,
+                'minimum_threshold_at_start': trader.min_account_threshold
             }
         )
         
         if not created:
-            # Update existing relationship
+            # Reactivate if was stopped
             copy_relation.is_actively_copying = True
-            copy_relation.minimum_amount_user_copied = trader.min_account_threshold
             copy_relation.stopped_copying_at = None
             copy_relation.save()
             message = f"Resumed copying {trader.name}"
@@ -1022,7 +1009,14 @@ def copy_trader_action(request):
             type="trade",
             title="Copy Trading Started",
             message=f"You are now copying {trader.name}",
-            full_details=f"Trader: {trader.name}\nMinimum Balance: ${min_threshold:,.2f}\nYour Balance: ${user_balance:,.2f}",
+            full_details=f"""
+Trader: {trader.name}
+Your Investment: ${min_threshold:,.2f}
+Trader's Starting Capital: ${trader.min_account_threshold:,.2f}
+
+You will receive trades proportional to your investment amount.
+Note: You will remain locked in even if the trader's minimum threshold changes.
+            """.strip()
         )
         
         return Response({
@@ -1032,7 +1026,6 @@ def copy_trader_action(request):
         }, status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED)
     
     elif action == 'cancel':
-        # Get copy relationship
         try:
             copy_relation = UserTraderCopy.objects.get(
                 user=user,
@@ -1040,10 +1033,7 @@ def copy_trader_action(request):
             )
         except UserTraderCopy.DoesNotExist:
             return Response(
-                {
-                    "success": False,
-                    "error": "You are not copying this trader"
-                },
+                {"success": False, "error": "You are not copying this trader"},
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -1065,6 +1055,129 @@ def copy_trader_action(request):
             "message": f"Stopped copying {trader.name}",
             "copy_relation": UserTraderCopySerializer(copy_relation).data
         }, status=status.HTTP_200_OK)
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# @authentication_classes([TokenAuthentication])
+# def copy_trader_action(request):
+#     """
+#     POST: Copy or cancel copying a trader
+#     Expects:
+#     - trader_id: ID of the trader
+#     - action: 'copy' or 'cancel'
+#     """
+#     user = request.user
+    
+#     # Validate input
+#     serializer = UserTraderCopyCreateSerializer(data=request.data)
+#     if not serializer.is_valid():
+#         return Response(
+#             {
+#                 "success": False,
+#                 "errors": serializer.errors
+#             },
+#             status=status.HTTP_400_BAD_REQUEST
+#         )
+    
+#     trader_id = serializer.validated_data['trader_id']
+#     action = serializer.validated_data['action']
+    
+#     # Get trader
+#     try:
+#         trader = Trader.objects.get(id=trader_id, is_active=True)
+#     except Trader.DoesNotExist:
+#         return Response(
+#             {
+#                 "success": False,
+#                 "error": "Trader not found or inactive"
+#             },
+#             status=status.HTTP_404_NOT_FOUND
+#         )
+    
+#     # Check user balance against minimum threshold
+#     min_threshold = float(trader.min_account_threshold)
+#     user_balance = float(user.balance)
+    
+#     if action == 'copy':
+#         # Validate user has sufficient balance
+#         if user_balance < min_threshold:
+#             return Response(
+#                 {
+#                     "success": False,
+#                     "error": f"Insufficient balance. Required: ${min_threshold:,.2f}, Your balance: ${user_balance:,.2f}"
+#                 },
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+        
+#         # Get or create copy relationship
+#         copy_relation, created = UserTraderCopy.objects.get_or_create(
+#             user=user,
+#             trader=trader,
+#             defaults={
+#                 'is_actively_copying': True,
+#                 'minimum_amount_user_copied': trader.min_account_threshold
+#             }
+#         )
+        
+#         if not created:
+#             # Update existing relationship
+#             copy_relation.is_actively_copying = True
+#             copy_relation.minimum_amount_user_copied = trader.min_account_threshold
+#             copy_relation.stopped_copying_at = None
+#             copy_relation.save()
+#             message = f"Resumed copying {trader.name}"
+#         else:
+#             message = f"Started copying {trader.name}"
+        
+#         # Create notification
+#         Notification.objects.create(
+#             user=user,
+#             type="trade",
+#             title="Copy Trading Started",
+#             message=f"You are now copying {trader.name}",
+#             full_details=f"Trader: {trader.name}\nMinimum Balance: ${min_threshold:,.2f}\nYour Balance: ${user_balance:,.2f}",
+#         )
+        
+#         return Response({
+#             "success": True,
+#             "message": message,
+#             "copy_relation": UserTraderCopySerializer(copy_relation).data
+#         }, status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED)
+    
+#     elif action == 'cancel':
+#         # Get copy relationship
+#         try:
+#             copy_relation = UserTraderCopy.objects.get(
+#                 user=user,
+#                 trader=trader
+#             )
+#         except UserTraderCopy.DoesNotExist:
+#             return Response(
+#                 {
+#                     "success": False,
+#                     "error": "You are not copying this trader"
+#                 },
+#                 status=status.HTTP_404_NOT_FOUND
+#             )
+        
+#         # Stop copying
+#         copy_relation.is_actively_copying = False
+#         copy_relation.save()
+        
+#         # Create notification
+#         Notification.objects.create(
+#             user=user,
+#             type="trade",
+#             title="Copy Trading Stopped",
+#             message=f"You have stopped copying {trader.name}",
+#             full_details=f"Trader: {trader.name}\nStopped at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}",
+#         )
+        
+#         return Response({
+#             "success": True,
+#             "message": f"Stopped copying {trader.name}",
+#             "copy_relation": UserTraderCopySerializer(copy_relation).data
+#         }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
@@ -1764,19 +1877,6 @@ def create_deposit_transaction(request):
             status="pending",
             created_at=timezone.now(),
         )
-
-        # ✅ NEW: Send admin notification email
-        try:
-            email_sent = send_admin_deposit_notification(user, transaction)
-            
-            if email_sent:
-                logger.info(f"✅ Admin notified of deposit from {user.email}")
-            else:
-                logger.warning(f"⚠️ Failed to notify admin of deposit from {user.email}")
-        except Exception as e:
-            logger.error(f"❌ Admin deposit notification error: {str(e)}")
-            # Don't fail the transaction if email fails
-            pass
 
         return Response(
             {
@@ -3760,45 +3860,50 @@ def generate_referral_code(request):
 def get_copy_trade_history(request):
     """
     GET: Get copy trading history for authenticated user
-    Query params:
-    - status: Filter by status (open/closed) - optional
-    - trader_id: Filter by specific trader - optional
-    - limit: Number of trades to return (default: 50)
+    Shows ALL trades from traders they're copying
     """
     user = request.user
     
-    # Base queryset
-    history = UserCopyTraderHistory.objects.filter(user=user)
+    # Get all traders user is actively copying
+    copying_traders = UserTraderCopy.objects.filter(
+        user=user,
+        is_actively_copying=True
+    ).values_list('trader_id', flat=True)
     
-    # Filter by status
+    # Get trade history for those traders
+    history = UserCopyTraderHistory.objects.filter(
+        trader_id__in=copying_traders
+    )
+    
+    # Filter by status if provided
     status_filter = request.GET.get('status')
     if status_filter and status_filter in ['open', 'closed']:
         history = history.filter(status=status_filter)
     
-    # Filter by trader
+    # Filter by trader if provided
     trader_id = request.GET.get('trader_id')
     if trader_id:
         history = history.filter(trader_id=trader_id)
     
-    # Calculate summary BEFORE slicing
-    open_trades = UserCopyTraderHistory.objects.filter(
-        user=user, 
-        status='open'
-    ).count()
+    # Calculate summary
+    open_trades = history.filter(status='open').count()
+    closed_trades = history.filter(status='closed').count()
     
-    closed_trades = UserCopyTraderHistory.objects.filter(
-        user=user, 
-        status='closed'
-    ).count()
+    # Calculate total P/L based on user's investment amounts
+    total_pl = Decimal('0.00')
+    for trade in history.filter(status='closed'):
+        try:
+            copy_relation = UserTraderCopy.objects.get(
+                user=user,
+                trader=trade.trader,
+                is_actively_copying=True
+            )
+            trade_pl = trade.calculate_user_profit_loss(copy_relation.initial_investment_amount)
+            total_pl += trade_pl
+        except UserTraderCopy.DoesNotExist:
+            continue
     
-    total_profit_loss = UserCopyTraderHistory.objects.filter(
-        user=user,
-        status='closed'
-    ).aggregate(
-        total=Sum('profit_loss')
-    )['total'] or Decimal('0.00')
-    
-    # NOW apply limit and slice
+    # Apply limit
     limit = request.GET.get('limit', 50)
     try:
         limit = int(limit)
@@ -3807,7 +3912,11 @@ def get_copy_trade_history(request):
     
     history_limited = history[:limit]
     
-    serializer = UserCopyTraderHistorySerializer(history_limited, many=True)
+    serializer = UserCopyTraderHistorySerializer(
+        history_limited,
+        many=True,
+        context={'request': request}
+    )
     
     return Response({
         "success": True,
@@ -3815,9 +3924,76 @@ def get_copy_trade_history(request):
         "summary": {
             "open_trades": open_trades,
             "closed_trades": closed_trades,
-            "total_profit_loss": str(total_profit_loss)
+            "total_profit_loss": str(total_pl)
         }
     }, status=status.HTTP_200_OK)
+
+
+
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# @authentication_classes([TokenAuthentication])
+# def get_copy_trade_history(request):
+#     """
+#     GET: Get copy trading history for authenticated user
+#     Query params:
+#     - status: Filter by status (open/closed) - optional
+#     - trader_id: Filter by specific trader - optional
+#     - limit: Number of trades to return (default: 50)
+#     """
+#     user = request.user
+    
+#     # Base queryset
+#     history = UserCopyTraderHistory.objects.filter(user=user)
+    
+#     # Filter by status
+#     status_filter = request.GET.get('status')
+#     if status_filter and status_filter in ['open', 'closed']:
+#         history = history.filter(status=status_filter)
+    
+#     # Filter by trader
+#     trader_id = request.GET.get('trader_id')
+#     if trader_id:
+#         history = history.filter(trader_id=trader_id)
+    
+#     # Calculate summary BEFORE slicing
+#     open_trades = UserCopyTraderHistory.objects.filter(
+#         user=user, 
+#         status='open'
+#     ).count()
+    
+#     closed_trades = UserCopyTraderHistory.objects.filter(
+#         user=user, 
+#         status='closed'
+#     ).count()
+    
+#     total_profit_loss = UserCopyTraderHistory.objects.filter(
+#         user=user,
+#         status='closed'
+#     ).aggregate(
+#         total=Sum('profit_loss')
+#     )['total'] or Decimal('0.00')
+    
+#     # NOW apply limit and slice
+#     limit = request.GET.get('limit', 50)
+#     try:
+#         limit = int(limit)
+#     except ValueError:
+#         limit = 50
+    
+#     history_limited = history[:limit]
+    
+#     serializer = UserCopyTraderHistorySerializer(history_limited, many=True)
+    
+#     return Response({
+#         "success": True,
+#         "history": serializer.data,
+#         "summary": {
+#             "open_trades": open_trades,
+#             "closed_trades": closed_trades,
+#             "total_profit_loss": str(total_profit_loss)
+#         }
+#     }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
@@ -3853,11 +4029,17 @@ def close_copy_trade(request, trade_id):
     POST: Close an open copy trade
     """
     user = request.user
-    
+
     try:
-        trade = UserCopyTraderHistory.objects.get(
-            id=trade_id, 
+        # Get traders the user is actively copying
+        copying_traders = UserTraderCopy.objects.filter(
             user=user,
+            is_actively_copying=True
+        ).values_list('trader_id', flat=True)
+
+        trade = UserCopyTraderHistory.objects.get(
+            id=trade_id,
+            trader_id__in=copying_traders,
             status='open'
         )
     except UserCopyTraderHistory.DoesNotExist:
@@ -3881,7 +4063,7 @@ def close_copy_trade(request, trade_id):
         type="trade",
         title="Copy Trade Closed",
         message=f"Your {trade.market} {trade.direction} trade has been closed",
-        full_details=f"Market: {trade.market}\nDirection: {trade.direction}\nProfit/Loss: ${float(trade.profit_loss):.2f}\nReference: {trade.reference}",
+        full_details=f"Market: {trade.market}\nDirection: {trade.direction}\nProfit/Loss: {float(trade.profit_loss_percent):.2f}%\nReference: {trade.reference}",
     )
     
     return Response({
@@ -3889,5 +4071,76 @@ def close_copy_trade(request, trade_id):
         "message": "Trade closed successfully",
         "trade": UserCopyTraderHistorySerializer(trade).data
     }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_loyalty_tiers(request):
+    """
+    GET: Return loyalty tier configuration and user's current tier info.
+    """
+    user = request.user
+    User = get_user_model()
+    tier_order = User.LOYALTY_TIER_ORDER
+    config = User.LOYALTY_TIER_CONFIG
+
+    total_deposits = Transaction.objects.filter(
+        user=user,
+        transaction_type='deposit',
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    tiers = []
+    for key in tier_order:
+        tier_data = config[key]
+        tiers.append({
+            'key': key,
+            'name': key.capitalize(),
+            'min_deposit': tier_data['min_deposit'],
+            'referral_bonus': tier_data['referral_bonus'],
+            'rank_bonus': tier_data['rank_bonus'],
+        })
+
+    return Response({
+        "success": True,
+        "tiers": tiers,
+        "current_tier": user.current_loyalty_status,
+        "next_tier": user.next_loyalty_status,
+        "total_deposits": float(total_deposits),
+        "next_amount_to_upgrade": float(user.next_amount_to_upgrade),
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def notify_deposit_intent(request):
+    """
+    POST: Notify admin when a user completes Stage 1 of the deposit flow
+    (amount entered, Continue clicked) — before receipt upload.
+
+    Expects:
+    - currency: e.g. "BTC"
+    - dollar_amount: Dollar value the user intends to deposit
+    - currency_unit: Calculated crypto unit amount
+    """
+    user = request.user
+    currency     = request.data.get("currency", "")
+    dollar_amount  = request.data.get("dollar_amount", "")
+    currency_unit  = request.data.get("currency_unit", "")
+
+    if not all([currency, dollar_amount, currency_unit]):
+        return Response(
+            {"success": False, "error": "currency, dollar_amount, and currency_unit are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        send_admin_deposit_intent_notification(user, dollar_amount, currency_unit, currency)
+        logger.info(f"Deposit intent email sent for {user.email} — ${dollar_amount} {currency}")
+    except Exception as e:
+        logger.error(f"Deposit intent email failed for {user.email}: {str(e)}")
+        # Do not fail the request if email fails
+
+    return Response({"success": True}, status=status.HTTP_200_OK)
 
 

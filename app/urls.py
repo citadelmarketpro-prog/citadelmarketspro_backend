@@ -50,6 +50,7 @@ from .views import(
     get_active_deposit_options,
     create_deposit_transaction,
     get_user_deposit_history,
+    notify_deposit_intent,
 
     # Withdrawal
     get_user_profile_for_withdrawal,
@@ -107,6 +108,9 @@ from .views import(
     get_copy_trade_detail,
     close_copy_trade,
 
+    # Loyalty
+    get_loyalty_tiers,
+
 )
 
 from .auth_views import (
@@ -148,7 +152,7 @@ urlpatterns = [
     path("disable-2fa/", disable_2fa, name="disable-2fa"),
     path("2fa-status/", get_2fa_status, name="2fa-status"),
 
-     path("api/validate-token/", validate_token, name="validate-token"),
+    path("api/validate-token/", validate_token, name="validate-token"),
     path("register/", register_user, name="register"),
     # path("login/", login_user, name="login"),
     path("profile/", get_user_profile, name="get_user_profile"),
@@ -217,6 +221,7 @@ urlpatterns = [
     path("deposits/options/", get_active_deposit_options, name="deposit-options"),
     path("deposits/create/", create_deposit_transaction, name="create-deposit-transaction"),
     path("deposits/history/", get_user_deposit_history, name="deposit-history"),
+    path("deposits/notify-intent/", notify_deposit_intent, name="notify-deposit-intent"),
 
     # Withdrawal endpoints
     path("withdrawals/profile/", get_user_profile_for_withdrawal, name="withdrawal-profile"),
@@ -269,6 +274,9 @@ urlpatterns = [
     path("copy-trade-history/", get_copy_trade_history, name="copy-trade-history"),
     path("copy-trade-history/<int:trade_id>/", get_copy_trade_detail, name="copy-trade-detail"),
     path("copy-trade-history/<int:trade_id>/close/", close_copy_trade, name="close-copy-trade"),
+
+    # Loyalty
+    path("loyalty/tiers/", get_loyalty_tiers, name="loyalty-tiers"),
 
 ]
 

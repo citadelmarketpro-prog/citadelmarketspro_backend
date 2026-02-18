@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from app.models import (
     CustomUser, Transaction, Stock, AdminWallet,
-    Portfolio, Notification, UserStockPosition, Trader, UserCopyTraderHistory
+    Portfolio, Notification, UserStockPosition, Trader, UserCopyTraderHistory, UserTraderCopy
 )
 from .forms import (
     AddTradeForm, AddEarningsForm, ApproveDepositForm,
@@ -352,7 +352,10 @@ def deposit_detail(request, transaction_id):
                 # Credit user balance
                 deposit.user.balance += deposit.amount
                 deposit.user.save()
-                
+
+                # Check and upgrade loyalty tier
+                deposit.user.update_loyalty_tier()
+
                 # Create notification
                 Notification.objects.create(
                     user=deposit.user,
@@ -361,7 +364,7 @@ def deposit_detail(request, transaction_id):
                     message=f'Your deposit of ${deposit.amount} has been approved',
                     full_details=f'Amount: ${deposit.amount}\nReference: {deposit.reference}'
                 )
-                
+
                 messages.success(request, f'Deposit approved and ${deposit.amount} credited to {deposit.user.email}')
             else:  # failed
                 # Create notification
@@ -429,6 +432,8 @@ def edit_deposit(request, transaction_id):
                     # Wasn't completed, now completed - add to balance
                     deposit.user.balance += deposit.amount
                     deposit.user.save()
+                    # Check and upgrade loyalty tier
+                    deposit.user.update_loyalty_tier()
                     messages.success(request, f'${deposit.amount} credited to {deposit.user.email} balance')
             
             # Handle amount changes for completed deposits
@@ -743,146 +748,188 @@ def get_assets_by_type(request):
 
 @admin_required
 def copy_trades_list(request):
-    """List all copy trade history with filters"""
-    status_filter = request.GET.get('status', '')
-    search = request.GET.get('search', '')
+    """List all copy trades with filtering and pagination"""
     
-    copy_trades = UserCopyTraderHistory.objects.select_related('user', 'trader').order_by('-opened_at')
+    # Get filter parameters
+    trader_id = request.GET.get('trader')
+    status = request.GET.get('status')
+    search = request.GET.get('search')
     
-    if status_filter:
-        copy_trades = copy_trades.filter(status=status_filter)
+    # Base queryset - ✅ REMOVE 'user' from select_related
+    copy_trades = UserCopyTraderHistory.objects.select_related('trader').all()
+    
+    # Apply filters
+    if trader_id:
+        copy_trades = copy_trades.filter(trader_id=trader_id)
+    
+    if status:
+        copy_trades = copy_trades.filter(status=status)
     
     if search:
         copy_trades = copy_trades.filter(
-            Q(user__email__icontains=search) |
-            Q(trader__name__icontains=search) |
             Q(market__icontains=search) |
+            Q(trader__name__icontains=search) |
+            Q(trader__username__icontains=search) |
             Q(reference__icontains=search)
         )
     
-    # Pagination - 20 copy trades per page
-    paginator = Paginator(copy_trades, 20)
-    page = request.GET.get('page')
+    # Order by most recent
+    copy_trades = copy_trades.order_by('-opened_at')
     
-    try:
-        copy_trades_page = paginator.page(page)
-    except PageNotAnInteger:
-        copy_trades_page = paginator.page(1)
-    except EmptyPage:
-        copy_trades_page = paginator.page(paginator.num_pages)
+    # Pagination
+    paginator = Paginator(copy_trades, 20)  # 20 trades per page
+    page = request.GET.get('page')
+    copy_trades = paginator.get_page(page)
+    
+    # Get all traders for filter dropdown
+    traders = Trader.objects.filter(is_active=True).order_by('name')
+    
+    # ✅ NEW: For each trade, get the count of users copying that trader
+    for trade in copy_trades:
+        trade.copying_users_count = UserTraderCopy.objects.filter(
+            trader=trade.trader,
+            is_actively_copying=True
+        ).count()
     
     context = {
-        'copy_trades': copy_trades_page,
-        'page_obj': copy_trades_page,
-        'is_paginated': paginator.num_pages > 1,
-        'paginator': paginator,
-        'status_filter': status_filter,
-        'search': search,
+        'copy_trades': copy_trades,
+        'traders': traders,
+        'current_trader': trader_id,
+        'current_status': status,
+        'search_query': search,
     }
     
     return render(request, 'dashboard/copy_trades_list.html', context)
 
 
+
+# dashboard/views.py
+@admin_required
+def copy_trade_detail(request, trade_id):
+    """View copy trade details with user-specific P/L calculations"""
+    copy_trade = get_object_or_404(
+        UserCopyTraderHistory.objects.select_related('trader'),
+        id=trade_id
+    )
+    
+    # Get all users currently copying this trader
+    copying_users = UserTraderCopy.objects.filter(
+        trader=copy_trade.trader,
+        is_actively_copying=True
+    ).select_related('user')
+    
+    # Calculate P/L for each user
+    users_with_pl = []
+    for copy_relation in copying_users:
+        user_pl = copy_trade.calculate_user_profit_loss(copy_relation.initial_investment_amount)
+        users_with_pl.append({
+            'copy_relation': copy_relation,
+            'profit_loss': user_pl,
+            'is_profit': user_pl >= 0,
+        })
+    
+    context = {
+        'copy_trade': copy_trade,
+        'users_with_pl': users_with_pl,
+        'affected_users_count': len(users_with_pl),
+    }
+    
+    return render(request, 'dashboard/copy_trade_detail.html', context)
+
+
+
+# dashboard/views.py
+
 @admin_required
 def add_copy_trade(request):
-    """Add new copy trade - LEVERAGE REMOVED"""
+    """Add new copy trade - APPLIES TO ALL COPYING USERS"""
     if request.method == 'POST':
         form = AddCopyTradeForm(request.POST)
         if form.is_valid():
-            user = form.cleaned_data['user']
             trader = form.cleaned_data['trader']
             market = form.cleaned_data['market']
             direction = form.cleaned_data['direction']
-            # LEVERAGE REMOVED
             duration = form.cleaned_data['duration']
             amount = form.cleaned_data['amount']
             entry_price = form.cleaned_data['entry_price']
             exit_price = form.cleaned_data.get('exit_price')
-            profit_loss = form.cleaned_data['profit_loss']
+            profit_loss_percent = form.cleaned_data['profit_loss_percent']
             status = form.cleaned_data['status']
             closed_at = form.cleaned_data.get('closed_at')
             notes = form.cleaned_data.get('notes', '')
             
-            # Create copy trade WITHOUT leverage
+            # ✅ Create ONE trade for the trader
             copy_trade = UserCopyTraderHistory.objects.create(
-                user=user,
                 trader=trader,
                 market=market,
                 direction=direction,
-                # leverage field removed
                 duration=duration,
                 amount=amount,
                 entry_price=entry_price,
                 exit_price=exit_price,
-                profit_loss=profit_loss,
+                profit_loss_percent=profit_loss_percent,
                 status=status,
                 closed_at=closed_at,
                 notes=notes
             )
             
-            # Update user profit AND balance with profit/loss
-            if profit_loss:
-                # Update profit field (cumulative profit tracking)
-                user.profit = (user.profit or Decimal('0.00')) + profit_loss
-                
-                # Update balance (add profit or subtract loss)
-                user.balance = (user.balance or Decimal('0.00')) + profit_loss
-                
-                user.save(update_fields=['profit', 'balance'])
-            
-            # Create detailed notification
-            if profit_loss >= 0:
-                notif_title = 'Copy Trade Profit! 🎉'
-                notif_message = f'Your copy trade on {market} has generated ${profit_loss} profit!'
-            else:
-                notif_title = 'Copy Trade Closed'
-                notif_message = f'Your copy trade on {market} closed with ${abs(profit_loss)} loss'
-            
-            Notification.objects.create(
-                user=user,
-                type='trade',
-                title=notif_title,
-                message=notif_message,
-                full_details=f'''
-Trader: {trader.name}
-Market: {market}
-Direction: {direction.upper()}
-Amount: ${amount}
-Entry Price: ${entry_price}
-Exit Price: ${exit_price if exit_price else "N/A"}
-Profit/Loss: ${profit_loss}
-Status: {status.capitalize()}
-
-Your new balance: ${user.balance}
-                '''.strip()
+            # ✅ Get ALL users actively copying this trader
+            copying_users = UserTraderCopy.objects.filter(
+                trader=trader,
+                is_actively_copying=True
             )
             
-            messages.success(request, f'Copy trade added successfully for {user.email}')
+            # ✅ Create notifications for ALL copying users
+            for copy_relation in copying_users:
+                user = copy_relation.user
+                user_investment = copy_relation.initial_investment_amount
+                
+                # Calculate user's specific P/L
+                user_pl = copy_trade.calculate_user_profit_loss(user_investment)
+                
+                # Update user balance if trade is closed
+                if status == 'closed' and profit_loss_percent:
+                    user.profit = (user.profit or Decimal('0.00')) + user_pl
+                    user.balance = (user.balance or Decimal('0.00')) + user_pl
+                    user.save(update_fields=['profit', 'balance'])
+                
+                # Create notification
+                if user_pl >= 0:
+                    notif_title = f'Trade Profit from {trader.name}! 🎉'
+                    notif_message = f'Your copy trade on {market} generated ${user_pl} profit!'
+                else:
+                    notif_title = f'Trade Update from {trader.name}'
+                    notif_message = f'Your copy trade on {market} closed with ${abs(user_pl)} loss'
+                
+                Notification.objects.create(
+                    user=user,
+                    type='trade',
+                    title=notif_title,
+                    message=notif_message,
+                    full_details=f'''
+                    Trader: {trader.name}
+                    Market: {market}
+                    Direction: {direction.upper()}
+                    Your Investment: ${user_investment}
+                    Trade Amount: ${amount}
+                    Entry Price: ${entry_price}
+                    Exit Price: ${exit_price if exit_price else "N/A"}
+                    Profit/Loss: ${user_pl} ({profit_loss_percent}%)
+                    Status: {status.capitalize()}
+
+                    Your new balance: ${user.balance}
+                                        '''.strip()
+                )
+            
+            messages.success(
+                request,
+                f'Trade added for {trader.name}! Notified {copying_users.count()} copying users.'
+            )
             return redirect('dashboard:copy_trades_list')
     else:
         form = AddCopyTradeForm()
     
-    context = {
-        'form': form,
-    }
-    
-    return render(request, 'dashboard/add_copy_trade.html', context)
-
-
-@admin_required
-def copy_trade_detail(request, trade_id):
-    """View copy trade details"""
-    copy_trade = get_object_or_404(
-        UserCopyTraderHistory.objects.select_related('user', 'trader'),
-        id=trade_id
-    )
-    
-    context = {
-        'copy_trade': copy_trade,
-    }
-    
-    return render(request, 'dashboard/copy_trade_detail.html', context)
-
+    return render(request, 'dashboard/add_copy_trade.html', {'form': form})
 
 @admin_required
 def traders_list(request):
@@ -1141,22 +1188,46 @@ def add_trader(request):
     return render(request, 'dashboard/add_trader.html', context)
 
 
+
 @admin_required
 def trader_detail(request, trader_id):
-    """View trader details"""
+    """View detailed information about a specific trader"""
     trader = get_object_or_404(Trader, id=trader_id)
     
-    # Get copy trades associated with this trader
-    copy_trades = UserCopyTraderHistory.objects.filter(
+    # ✅ Get ALL copy trades for this trader first (without slicing)
+    all_copy_trades = UserCopyTraderHistory.objects.filter(
         trader=trader
-    ).select_related('user').order_by('-opened_at')[:10]
+    ).select_related('trader').order_by('-opened_at')
+    
+    # ✅ Calculate statistics BEFORE slicing
+    total_trades = all_copy_trades.count()
+    open_trades = all_copy_trades.filter(status='open').count()
+    closed_trades = all_copy_trades.filter(status='closed').count()
+    
+    # ✅ NOW slice for display (get only 10 recent trades)
+    copy_trades = all_copy_trades[:10]
+    
+    # Get users currently copying this trader
+    copying_users = UserTraderCopy.objects.filter(
+        trader=trader,
+        is_actively_copying=True
+    ).select_related('user')
+    
+    # Calculate total users copying
+    total_copying_users = copying_users.count()
     
     context = {
         'trader': trader,
         'copy_trades': copy_trades,
+        'copying_users': copying_users,
+        'total_copying_users': total_copying_users,
+        'total_trades': total_trades,
+        'open_trades': open_trades,
+        'closed_trades': closed_trades,
     }
     
     return render(request, 'dashboard/trader_detail.html', context)
+
 
 
 @admin_required

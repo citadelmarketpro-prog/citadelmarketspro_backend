@@ -110,39 +110,118 @@ class TraderSerializer(serializers.ModelSerializer):
 
 
 # Admin will update it himself
+# app/serializers.py
+
+
 class UserCopyTraderHistorySerializer(serializers.ModelSerializer):
-    """Serializer for copy trade history"""
-    time_ago = serializers.ReadOnlyField()
-    is_profit = serializers.ReadOnlyField()
-    market_logo_url = serializers.ReadOnlyField()
-    market_name = serializers.ReadOnlyField()
+    """Serializer for user-specific view of trader history"""
     trader_name = serializers.CharField(source='trader.name', read_only=True)
     trader_username = serializers.CharField(source='trader.username', read_only=True)
+    market_name = serializers.SerializerMethodField()
+    market_logo_url = serializers.SerializerMethodField()
+    time_ago = serializers.SerializerMethodField()
+    is_profit = serializers.SerializerMethodField()
+    
+    # ✅ User-specific profit/loss calculation
+    user_profit_loss = serializers.SerializerMethodField()
+    user_amount_invested = serializers.SerializerMethodField()
     
     class Meta:
         model = UserCopyTraderHistory
         fields = [
-            'id',
-            'trader_name',
-            'trader_username',
-            'market',
-            'market_name',
-            'market_logo_url',
-            'direction',
-            # 'leverage',
-            'duration',
-            'amount',
-            'entry_price',
-            'exit_price',
-            'profit_loss',
-            'status',
-            'opened_at',
-            'closed_at',
-            'reference',
-            'time_ago',
-            'is_profit'
+            'id', 'trader_name', 'trader_username',
+            'market', 'market_name', 'market_logo_url',
+            'direction', 'duration', 'amount',
+            'entry_price', 'exit_price',
+            'profit_loss_percent',  # ✅ Changed from profit_loss
+            'user_profit_loss',     # ✅ NEW
+            'user_amount_invested', # ✅ NEW
+            'status', 'opened_at', 'closed_at',
+            'reference', 'time_ago', 'is_profit'
         ]
-        read_only_fields = ['id', 'opened_at', 'reference']
+    
+    def get_market_name(self, obj):
+        return obj.market_name
+    
+    def get_market_logo_url(self, obj):
+        return obj.market_logo_url
+    
+    def get_time_ago(self, obj):
+        return obj.time_ago
+    
+    def get_is_profit(self, obj):
+        return obj.is_profit
+    
+    def get_user_profit_loss(self, obj):
+        """Calculate profit/loss based on user's investment amount"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return "0.00"
+        
+        try:
+            # Get user's copy relationship
+            copy_relation = UserTraderCopy.objects.get(
+                user=request.user,
+                trader=obj.trader,
+                is_actively_copying=True
+            )
+            # Calculate P/L based on user's investment amount
+            pl = obj.calculate_user_profit_loss(copy_relation.initial_investment_amount)
+            return str(pl)
+        except UserTraderCopy.DoesNotExist:
+            return "0.00"
+    
+    def get_user_amount_invested(self, obj):
+        """Get user's investment amount for this trader"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return "0.00"
+        
+        try:
+            copy_relation = UserTraderCopy.objects.get(
+                user=request.user,
+                trader=obj.trader,
+                is_actively_copying=True
+            )
+            return str(copy_relation.initial_investment_amount)
+        except UserTraderCopy.DoesNotExist:
+            return "0.00"
+        
+        
+
+# class UserCopyTraderHistorySerializer(serializers.ModelSerializer):
+#     """Serializer for copy trade history"""
+#     time_ago = serializers.ReadOnlyField()
+#     is_profit = serializers.ReadOnlyField()
+#     market_logo_url = serializers.ReadOnlyField()
+#     market_name = serializers.ReadOnlyField()
+#     trader_name = serializers.CharField(source='trader.name', read_only=True)
+#     trader_username = serializers.CharField(source='trader.username', read_only=True)
+    
+#     class Meta:
+#         model = UserCopyTraderHistory
+#         fields = [
+#             'id',
+#             'trader_name',
+#             'trader_username',
+#             'market',
+#             'market_name',
+#             'market_logo_url',
+#             'direction',
+#             # 'leverage',
+#             'duration',
+#             'amount',
+#             'entry_price',
+#             'exit_price',
+#             'profit_loss',
+#             'status',
+#             'opened_at',
+#             'closed_at',
+#             'reference',
+#             'time_ago',
+#             'is_profit'
+#         ]
+#         read_only_fields = ['id', 'opened_at', 'reference']
 
 
 
@@ -288,39 +367,46 @@ class UserTraderCopySerializer(serializers.ModelSerializer):
     """Serializer for UserTraderCopy model"""
     trader_name = serializers.CharField(source='trader.name', read_only=True)
     trader_username = serializers.CharField(source='trader.username', read_only=True)
-    trader_gain = serializers.CharField(source='trader.gain', read_only=True)
-    trader_risk = serializers.IntegerField(source='trader.risk', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
     
     class Meta:
         model = UserTraderCopy
         fields = [
             'id',
             'user',
+            'user_email',
             'trader',
             'trader_name',
             'trader_username',
-            'trader_gain',
-            'trader_risk',
             'is_actively_copying',
-            'minimum_amount_user_copied',
+            'initial_investment_amount',        # ✅ Updated field name
+            'minimum_threshold_at_start',       # ✅ Updated field name
             'started_copying_at',
             'last_updated',
-            'stopped_copying_at'
+            'stopped_copying_at',
         ]
-        read_only_fields = ['id', 'started_copying_at', 'last_updated', 'stopped_copying_at']
+        read_only_fields = ['started_copying_at', 'last_updated', 'stopped_copying_at']
+
+
 
 
 class UserTraderCopyCreateSerializer(serializers.Serializer):
-    """Serializer for creating/updating copy trader relationship"""
+    """Serializer for copy/cancel trader actions"""
     trader_id = serializers.IntegerField()
     action = serializers.ChoiceField(choices=['copy', 'cancel'])
     
     def validate_trader_id(self, value):
-        """Validate trader exists"""
+        """Validate that trader exists and is active"""
         try:
             Trader.objects.get(id=value, is_active=True)
         except Trader.DoesNotExist:
             raise serializers.ValidationError("Trader not found or inactive")
+        return value
+    
+    def validate_action(self, value):
+        """Validate action"""
+        if value not in ['copy', 'cancel']:
+            raise serializers.ValidationError("Action must be 'copy' or 'cancel'")
         return value
 
 
