@@ -993,12 +993,19 @@ def copy_trader_action(request):
                 'minimum_threshold_at_start': trader.min_account_threshold
             }
         )
-        
+
         if not created:
-            # Reactivate if was stopped
+            # Reactivate and always refresh the investment amount so P/L is correct
             copy_relation.is_actively_copying = True
             copy_relation.stopped_copying_at = None
-            copy_relation.save()
+            copy_relation.initial_investment_amount = min_threshold
+            copy_relation.minimum_threshold_at_start = trader.min_account_threshold
+            copy_relation.save(update_fields=[
+                'is_actively_copying',
+                'stopped_copying_at',
+                'initial_investment_amount',
+                'minimum_threshold_at_start',
+            ])
             message = f"Resumed copying {trader.name}"
         else:
             message = f"Started copying {trader.name}"

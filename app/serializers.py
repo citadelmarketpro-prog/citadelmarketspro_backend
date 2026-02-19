@@ -157,35 +157,34 @@ class UserCopyTraderHistorySerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return "0.00"
-        
-        try:
-            # Get user's copy relationship
-            copy_relation = UserTraderCopy.objects.get(
-                user=request.user,
-                trader=obj.trader,
-                is_actively_copying=True
-            )
-            # Calculate P/L based on user's investment amount
-            pl = obj.calculate_user_profit_loss(copy_relation.initial_investment_amount)
-            return str(pl)
-        except UserTraderCopy.DoesNotExist:
+
+        # Use .filter().first() so stopped users still get their P/L shown
+        copy_relation = UserTraderCopy.objects.filter(
+            user=request.user,
+            trader=obj.trader,
+        ).order_by('-started_copying_at').first()
+
+        if not copy_relation:
             return "0.00"
-    
+
+        pl = obj.calculate_user_profit_loss(copy_relation.initial_investment_amount)
+        return str(pl)
+
     def get_user_amount_invested(self, obj):
         """Get user's investment amount for this trader"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return "0.00"
-        
-        try:
-            copy_relation = UserTraderCopy.objects.get(
-                user=request.user,
-                trader=obj.trader,
-                is_actively_copying=True
-            )
-            return str(copy_relation.initial_investment_amount)
-        except UserTraderCopy.DoesNotExist:
+
+        copy_relation = UserTraderCopy.objects.filter(
+            user=request.user,
+            trader=obj.trader,
+        ).order_by('-started_copying_at').first()
+
+        if not copy_relation:
             return "0.00"
+
+        return str(copy_relation.initial_investment_amount)
         
         
 
