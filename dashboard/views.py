@@ -897,39 +897,45 @@ def add_copy_trade(request):
                 # Calculate user's specific P/L
                 user_pl = copy_trade.calculate_user_profit_loss(user_investment)
                 
-                # Update user balance if trade is closed
+                # Update user accounts only when trade is closed at creation
                 if status == 'closed' and profit_loss_percent:
-                    user.profit = (user.profit or Decimal('0.00')) + user_pl
-                    user.balance = (user.balance or Decimal('0.00')) + user_pl
-                    user.save(update_fields=['profit', 'balance'])
-                
-                # Create notification
-                if user_pl >= 0:
-                    notif_title = f'Trade Profit from {trader.name}! 🎉'
-                    notif_message = f'Your copy trade on {market} generated ${user_pl} profit!'
-                else:
-                    notif_title = f'Trade Update from {trader.name}'
-                    notif_message = f'Your copy trade on {market} closed with ${abs(user_pl)} loss'
-                
-                Notification.objects.create(
-                    user=user,
-                    type='trade',
-                    title=notif_title,
-                    message=notif_message,
-                    full_details=f'''
-                    Trader: {trader.name}
-                    Market: {market}
-                    Direction: {direction.upper()}
-                    Your Investment: ${user_investment}
-                    Trade Amount: ${amount}
-                    Entry Price: ${entry_price}
-                    Exit Price: ${exit_price if exit_price else "N/A"}
-                    Profit/Loss: ${user_pl} ({profit_loss_percent}%)
-                    Status: {status.capitalize()}
+                    if user_pl > 0:
+                        # Gain → add to profit account
+                        user.profit = (user.profit or Decimal('0.00')) + user_pl
+                        user.save(update_fields=['profit'])
+                    elif user_pl < 0:
+                        # Loss → deduct from main balance (only if balance > 0)
+                        current_balance = user.balance or Decimal('0.00')
+                        if current_balance > Decimal('0.00'):
+                            user.balance = max(Decimal('0.00'), current_balance + user_pl)
+                            user.save(update_fields=['balance'])
 
-                    Your new balance: ${user.balance}
-                                        '''.strip()
-                )
+                # Create notification (only if trade is closed — open trades notify later)
+                if status == 'closed':
+                    if user_pl >= 0:
+                        notif_title = f'Trade Profit from {trader.name}!'
+                        notif_message = f'Your copy trade on {market} generated ${user_pl:.2f} profit!'
+                    else:
+                        notif_title = f'Trade Update from {trader.name}'
+                        notif_message = f'Your copy trade on {market} closed with ${abs(user_pl):.2f} loss'
+
+                    Notification.objects.create(
+                        user=user,
+                        type='trade',
+                        title=notif_title,
+                        message=notif_message,
+                        full_details=f'''Trader: {trader.name}
+Market: {market}
+Direction: {direction.upper()}
+Your Investment: ${user_investment}
+Trade Amount: ${amount}
+Entry Price: ${entry_price}
+Exit Price: ${exit_price if exit_price else "N/A"}
+Profit/Loss: ${user_pl:.2f} ({profit_loss_percent}%)
+Status: {status.capitalize()}
+Your Profit Account: ${user.profit:.2f}
+Your Main Balance: ${user.balance:.2f}'''.strip()
+                    )
             
             messages.success(
                 request,

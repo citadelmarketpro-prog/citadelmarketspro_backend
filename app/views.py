@@ -4006,7 +4006,10 @@ def get_copy_trade_detail(request, trade_id):
     user = request.user
     
     try:
-        trade = UserCopyTraderHistory.objects.get(id=trade_id, user=user)
+        copying_traders = UserTraderCopy.objects.filter(
+            user=user
+        ).values_list('trader_id', flat=True)
+        trade = UserCopyTraderHistory.objects.get(id=trade_id, trader_id__in=copying_traders)
     except UserCopyTraderHistory.DoesNotExist:
         return Response({
             "success": False,
@@ -4051,24 +4054,50 @@ def close_copy_trade(request, trade_id):
     # Update trade status
     trade.status = 'closed'
     trade.closed_at = timezone.now()
-    
-    # You can also update profit_loss here if needed
-    # trade.profit_loss = calculate_final_profit_loss(trade)
-    
     trade.save()
-    
-    # Create notification
+
+    # Get user's investment amount for this trader
+    copy_relation = UserTraderCopy.objects.filter(
+        user=user,
+        trader=trade.trader,
+    ).first()
+    user_investment = copy_relation.initial_investment_amount if copy_relation else Decimal('0.00')
+
+    # Calculate this user's P/L based on their investment
+    user_pl = trade.calculate_user_profit_loss(user_investment)
+
+    # Apply P/L: gain → user.profit, loss → user.balance (if > 0)
+    if user_pl > 0:
+        user.profit = (user.profit or Decimal('0.00')) + user_pl
+        user.save(update_fields=['profit'])
+    elif user_pl < 0:
+        current_balance = user.balance or Decimal('0.00')
+        if current_balance > Decimal('0.00'):
+            user.balance = max(Decimal('0.00'), current_balance + user_pl)
+            user.save(update_fields=['balance'])
+
+    # Notification
+    if user_pl >= 0:
+        notif_title = "Copy Trade Closed — Profit!"
+        notif_message = f"Your {trade.market} {trade.direction} trade closed with ${user_pl:.2f} profit."
+    else:
+        notif_title = "Copy Trade Closed"
+        notif_message = f"Your {trade.market} {trade.direction} trade closed with ${abs(user_pl):.2f} loss."
+
     Notification.objects.create(
         user=user,
         type="trade",
-        title="Copy Trade Closed",
-        message=f"Your {trade.market} {trade.direction} trade has been closed",
-        full_details=f"Market: {trade.market}\nDirection: {trade.direction}\nProfit/Loss: {float(trade.profit_loss_percent):.2f}%\nReference: {trade.reference}",
+        title=notif_title,
+        message=notif_message,
+        full_details=f"Market: {trade.market}\nDirection: {trade.direction}\nProfit/Loss %: {float(trade.profit_loss_percent):.2f}%\nYour P/L: ${user_pl:.2f}\nReference: {trade.reference}",
     )
-    
+
     return Response({
         "success": True,
         "message": "Trade closed successfully",
+        "user_profit_loss": float(user_pl),
+        "balance": float(user.balance),
+        "profit": float(user.profit),
         "trade": UserCopyTraderHistorySerializer(trade).data
     }, status=status.HTTP_200_OK)
 

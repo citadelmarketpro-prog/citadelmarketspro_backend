@@ -59,13 +59,12 @@ class UserCopyTraderHistoryAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Relationships', {
-            'fields': ('user', 'trader')
+            'fields': ('trader',)
         }),
         ('Trade Details', {
             'fields': (
                 'market',
                 'direction',
-                # 'leverage',
                 'duration',
                 'status',
                 'reference'
@@ -76,7 +75,7 @@ class UserCopyTraderHistoryAdmin(admin.ModelAdmin):
                 'amount',
                 'entry_price',
                 'exit_price',
-                'profit_loss'
+                'profit_loss_percent'
             )
         }),
         ('Timestamps', {
@@ -93,10 +92,13 @@ class UserCopyTraderHistoryAdmin(admin.ModelAdmin):
     )
     
     def user_email(self, obj):
-        return obj.user.email if obj.user else '-'
+        try:
+            copy = obj.trader.user_copies.first()
+            return copy.user.email if copy and copy.user else '-'
+        except Exception:
+            return '-'
     user_email.short_description = 'User'
-    user_email.admin_order_field = 'user__email'
-    
+
     def trader_name(self, obj):
         return obj.trader.name if obj.trader else '-'
     trader_name.short_description = 'Trader'
@@ -104,18 +106,16 @@ class UserCopyTraderHistoryAdmin(admin.ModelAdmin):
     
     def profit_loss_display(self, obj):
         """Display profit/loss with color coding"""
-        color = 'green' if obj.profit_loss >= 0 else 'red'
-        symbol = '+' if obj.profit_loss >= 0 else ''
-        
-        # Format the number FIRST, then pass to format_html
-        formatted_value = f"{symbol}{float(obj.profit_loss):.2f}"
-        
+        value = obj.profit_loss_percent
+        color = 'green' if value >= 0 else 'red'
+        symbol = '+' if value >= 0 else ''
+        formatted_value = f"{symbol}{float(value):.2f}%"
         return format_html(
             '<span style="color: {}; font-weight: bold;">{}</span>',
             color,
             formatted_value
         )
-    profit_loss_display.short_description = 'Profit/Loss'
+    profit_loss_display.short_description = 'Profit/Loss %'
     
     def display_time_ago(self, obj):
         """Safe wrapper for time_ago that handles None values"""
