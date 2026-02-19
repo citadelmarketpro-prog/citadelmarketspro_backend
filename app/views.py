@@ -3896,19 +3896,10 @@ def get_copy_trade_history(request):
     open_trades = history.filter(status='open').count()
     closed_trades = history.filter(status='closed').count()
     
-    # Calculate total P/L based on user's investment amounts
+    # Calculate total P/L using each trade's own amount field
     total_pl = Decimal('0.00')
     for trade in history.filter(status='closed'):
-        try:
-            copy_relation = UserTraderCopy.objects.get(
-                user=user,
-                trader=trade.trader,
-                is_actively_copying=True
-            )
-            trade_pl = trade.calculate_user_profit_loss(copy_relation.initial_investment_amount)
-            total_pl += trade_pl
-        except UserTraderCopy.DoesNotExist:
-            continue
+        total_pl += trade.calculate_user_profit_loss()
     
     # Apply limit
     limit = request.GET.get('limit', 50)
@@ -4063,15 +4054,8 @@ def close_copy_trade(request, trade_id):
     trade.closed_at = timezone.now()
     trade.save()
 
-    # Get user's investment amount for this trader
-    copy_relation = UserTraderCopy.objects.filter(
-        user=user,
-        trader=trade.trader,
-    ).first()
-    user_investment = copy_relation.initial_investment_amount if copy_relation else Decimal('0.00')
-
-    # Calculate this user's P/L based on their investment
-    user_pl = trade.calculate_user_profit_loss(user_investment)
+    # P/L is based on the trade's own amount field (admin-entered investment)
+    user_pl = trade.calculate_user_profit_loss()
 
     # Apply P/L: gain → user.profit, loss → user.balance (if > 0)
     if user_pl > 0:

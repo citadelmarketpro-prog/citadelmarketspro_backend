@@ -828,10 +828,10 @@ def copy_trade_detail(request, trade_id):
         is_actively_copying=True
     ).select_related('user')
     
-    # Calculate P/L for each user
+    # P/L uses the trade's own amount field (admin-entered investment)
+    user_pl = copy_trade.calculate_user_profit_loss()
     users_with_pl = []
     for copy_relation in copying_users:
-        user_pl = copy_trade.calculate_user_profit_loss(copy_relation.initial_investment_amount)
         users_with_pl.append({
             'copy_relation': copy_relation,
             'profit_loss': user_pl,
@@ -892,10 +892,9 @@ def add_copy_trade(request):
             # ✅ Create notifications for ALL copying users
             for copy_relation in copying_users:
                 user = copy_relation.user
-                user_investment = copy_relation.initial_investment_amount
-                
-                # Calculate user's specific P/L
-                user_pl = copy_trade.calculate_user_profit_loss(user_investment)
+
+                # P/L is based on the trade's own amount field (admin-entered investment)
+                user_pl = copy_trade.calculate_user_profit_loss()
                 
                 # Update user accounts only when trade is closed at creation
                 if status == 'closed' and profit_loss_percent:

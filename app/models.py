@@ -688,10 +688,14 @@ class UserCopyTraderHistory(models.Model):
     def __str__(self):
         return f"{self.trader.name} - {self.market} - {self.direction} - {self.status}"
     
-    def calculate_user_profit_loss(self, user_investment_amount):
-        """Calculate P/L for a specific user based on their investment amount"""
+    def calculate_user_profit_loss(self, user_investment_amount=None):
+        """
+        Calculate P/L based on the trade's own amount field (admin-entered investment).
+        The optional user_investment_amount parameter is ignored — P/L is always
+        derived from self.amount so every caller returns consistent values.
+        """
         if self.profit_loss_percent:
-            return (Decimal(user_investment_amount) * self.profit_loss_percent) / Decimal('100')
+            return (Decimal(self.amount) * self.profit_loss_percent) / Decimal('100')
         return Decimal('0.00')
     
     @property

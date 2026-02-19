@@ -153,38 +153,12 @@ class UserCopyTraderHistorySerializer(serializers.ModelSerializer):
         return obj.is_profit
     
     def get_user_profit_loss(self, obj):
-        """Calculate profit/loss based on user's investment amount"""
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return "0.00"
-
-        # Use .filter().first() so stopped users still get their P/L shown
-        copy_relation = UserTraderCopy.objects.filter(
-            user=request.user,
-            trader=obj.trader,
-        ).order_by('-started_copying_at').first()
-
-        if not copy_relation:
-            return "0.00"
-
-        pl = obj.calculate_user_profit_loss(copy_relation.initial_investment_amount)
-        return str(pl)
+        """P/L is always trade.amount * profit_loss_percent / 100."""
+        return str(obj.calculate_user_profit_loss())
 
     def get_user_amount_invested(self, obj):
-        """Get user's investment amount for this trader"""
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return "0.00"
-
-        copy_relation = UserTraderCopy.objects.filter(
-            user=request.user,
-            trader=obj.trader,
-        ).order_by('-started_copying_at').first()
-
-        if not copy_relation:
-            return "0.00"
-
-        return str(copy_relation.initial_investment_amount)
+        """The admin-entered trade amount IS the user's investment."""
+        return str(obj.amount)
         
         
 
