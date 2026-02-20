@@ -926,7 +926,6 @@ def add_copy_trade(request):
                         full_details=f'''Trader: {trader.name}
 Market: {market}
 Direction: {direction.upper()}
-Your Investment: ${user_investment}
 Trade Amount: ${amount}
 Entry Price: ${entry_price}
 Exit Price: ${exit_price if exit_price else "N/A"}
