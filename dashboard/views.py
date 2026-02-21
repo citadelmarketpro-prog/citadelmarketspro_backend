@@ -896,18 +896,15 @@ def add_copy_trade(request):
                 # P/L is based on the trade's own amount field (admin-entered investment)
                 user_pl = copy_trade.calculate_user_profit_loss()
                 
-                # Update user accounts only when trade is closed at creation
+                # Update main balance when trade is closed at creation
                 if status == 'closed' and profit_loss_percent:
+                    current_balance = user.balance or Decimal('0.00')
                     if user_pl > 0:
-                        # Gain → add to profit account
-                        user.profit = (user.profit or Decimal('0.00')) + user_pl
-                        user.save(update_fields=['profit'])
-                    elif user_pl < 0:
-                        # Loss → deduct from main balance (only if balance > 0)
-                        current_balance = user.balance or Decimal('0.00')
-                        if current_balance > Decimal('0.00'):
-                            user.balance = max(Decimal('0.00'), current_balance + user_pl)
-                            user.save(update_fields=['balance'])
+                        user.balance = current_balance + user_pl
+                        user.save(update_fields=['balance'])
+                    elif user_pl < 0 and current_balance > Decimal('0.00'):
+                        user.balance = max(Decimal('0.00'), current_balance + user_pl)
+                        user.save(update_fields=['balance'])
 
                 # Create notification (only if trade is closed — open trades notify later)
                 if status == 'closed':
@@ -931,7 +928,6 @@ Entry Price: ${entry_price}
 Exit Price: ${exit_price if exit_price else "N/A"}
 Profit/Loss: ${user_pl:.2f} ({profit_loss_percent}%)
 Status: {status.capitalize()}
-Your Profit Account: ${user.profit:.2f}
 Your Main Balance: ${user.balance:.2f}'''.strip()
                     )
             

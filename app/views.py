@@ -4057,15 +4057,14 @@ def close_copy_trade(request, trade_id):
     # P/L is based on the trade's own amount field (admin-entered investment)
     user_pl = trade.calculate_user_profit_loss()
 
-    # Apply P/L: gain → user.profit, loss → user.balance (if > 0)
+    # Apply P/L entirely to main balance (gain adds, loss deducts, floor at 0)
+    current_balance = user.balance or Decimal('0.00')
     if user_pl > 0:
-        user.profit = (user.profit or Decimal('0.00')) + user_pl
-        user.save(update_fields=['profit'])
-    elif user_pl < 0:
-        current_balance = user.balance or Decimal('0.00')
-        if current_balance > Decimal('0.00'):
-            user.balance = max(Decimal('0.00'), current_balance + user_pl)
-            user.save(update_fields=['balance'])
+        user.balance = current_balance + user_pl
+        user.save(update_fields=['balance'])
+    elif user_pl < 0 and current_balance > Decimal('0.00'):
+        user.balance = max(Decimal('0.00'), current_balance + user_pl)
+        user.save(update_fields=['balance'])
 
     # Notification
     if user_pl >= 0:
