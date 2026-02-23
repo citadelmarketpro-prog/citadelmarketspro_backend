@@ -84,11 +84,18 @@
                 </li>
                 
                 <li><div class="text-xs text-blue-300 uppercase tracking-wider mt-6 mb-2 px-3">Users</div></li>
-                <a href="{% url 'dashboard:investors_list' %}" 
-                class="flex items-center px-4 py-3 text-white hover:bg-blue-50 hover:text-blue-600 rounded-lg transition">
-                    <i class="fas fa-wallet mr-3 text-lg"></i>
-                    <span>Investors</span>
-                </a>
+                <li>
+                    <a href="{% url 'dashboard:users_trade_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'user-trades' in request.path or 'investor' in request.resolver_match.url_name %}bg-blue-700{% endif %}">
+                        <i class="fas fa-wallet w-6"></i>
+                        <span class="ml-3">Investors</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'dashboard:user_copy_trades_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'user-copy-trades' in request.path %}bg-blue-700{% endif %}">
+                        <i class="fas fa-copy w-6"></i>
+                        <span class="ml-3">User Copy Trades</span>
+                    </a>
+                </li>
                 <li>
                     <a href="{% url 'dashboard:users' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'users' in request.path %}bg-blue-700{% endif %}">
                         <i class="fas fa-users w-6"></i>
@@ -123,12 +130,6 @@
                 </li>
                 
                 <li><div class="text-xs text-blue-300 uppercase tracking-wider mt-6 mb-2 px-3">Trading</div></li>
-                <!-- <li>
-                    <a href="{% url 'dashboard:add_trade' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'add-trade' in request.path %}bg-blue-700{% endif %}">
-                        <i class="fas fa-chart-line w-6"></i>
-                        <span class="ml-3">Add Trade</span>
-                    </a>
-                </li> -->
                 <li>
                     <a href="{% url 'dashboard:add_earnings' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'add-earnings' in request.path %}bg-blue-700{% endif %}">
                         <i class="fas fa-dollar-sign w-6"></i>
@@ -136,9 +137,9 @@
                     </a>
                 </li>
                 
-                <li><div class="text-xs text-blue-300 uppercase tracking-wider mt-6 mb-2 px-3">Copy Trading</div></li>
+                <!-- <li><div class="text-xs text-blue-300 uppercase tracking-wider mt-6 mb-2 px-3">Copy Trading</div></li>
                 <li>
-                    <a href="{% url 'dashboard:copy_trades_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'copy-trades' in request.path and 'add' not in request.path %}bg-blue-700{% endif %}">
+                    <a href="{% url 'dashboard:copy_trades_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'copy-trades' in request.path and 'add' not in request.path and 'bulk-edit' not in request.path and 'edit' not in request.path %}bg-blue-700{% endif %}">
                         <i class="fas fa-copy w-6"></i>
                         <span class="ml-3">Copy Trades</span>
                     </a>
@@ -148,19 +149,57 @@
                         <i class="fas fa-plus-circle w-6"></i>
                         <span class="ml-3">Add Copy Trade</span>
                     </a>
+                </li> -->
+                <li>
+                    <a href="{% url 'dashboard:bulk_edit_copy_trade' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'bulk-edit' in request.path %}bg-blue-700{% endif %}">
+                        <i class="fas fa-edit w-6"></i>
+                        <span class="ml-3">Bulk Edit Trades</span>
+                    </a>
                 </li>
                 
                 <li><div class="text-xs text-blue-300 uppercase tracking-wider mt-6 mb-2 px-3">Trader Management</div></li>
                 <li>
-                    <a href="{% url 'dashboard:traders_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'traders' in request.path and 'add' not in request.path and 'edit' not in request.path %}bg-blue-700{% endif %}">
+                    <a href="{% url 'dashboard:traders_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'traders' in request.path and 'add' not in request.path and 'edit' not in request.path and 'user-experts' not in request.path %}bg-blue-700{% endif %}">
                         <i class="fas fa-user-tie w-6"></i>
-                        <span class="ml-3">Pro Traders</span>
+                        <span class="ml-3">Expert Traders</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'dashboard:user_experts' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'user-experts' in request.path %}bg-blue-700{% endif %}">
+                        <i class="fas fa-users-cog w-6"></i>
+                        <span class="ml-3">User Experts</span>
                     </a>
                 </li>
                 <li>
                     <a href="{% url 'dashboard:add_trader' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'traders/add' in request.path %}bg-blue-700{% endif %}">
                         <i class="fas fa-user-plus w-6"></i>
                         <span class="ml-3">Add Trader</span>
+                    </a>
+                </li>
+
+                <li><div class="text-xs text-blue-300 uppercase tracking-wider mt-6 mb-2 px-3">Settings</div></li>
+                <li>
+                    <a href="{% url 'dashboard:wallets_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'wallets' in request.path and 'wallet-connections' not in request.path %}bg-blue-700{% endif %}">
+                        <i class="fas fa-wallet w-6"></i>
+                        <span class="ml-3">Admin Wallets</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'dashboard:wallet_connections_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'wallet-connections' in request.path %}bg-blue-700{% endif %}">
+                        <i class="fas fa-link w-6"></i>
+                        <span class="ml-3">Wallet Connections</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'dashboard:cards_list' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'cards' in request.path %}bg-blue-700{% endif %}">
+                        <i class="fas fa-credit-card w-6"></i>
+                        <span class="ml-3">User Cards</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'dashboard:change_user_password' %}" class="flex items-center p-3 text-white rounded-lg hover:bg-blue-700 {% if 'change-password' in request.path %}bg-blue-700{% endif %}">
+                        <i class="fas fa-key w-6"></i>
+                        <span class="ml-3">Change Password</span>
                     </a>
                 </li>
             </ul>

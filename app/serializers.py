@@ -352,13 +352,15 @@ class UserTraderCopySerializer(serializers.ModelSerializer):
             'trader_name',
             'trader_username',
             'is_actively_copying',
-            'initial_investment_amount',        # ✅ Updated field name
-            'minimum_threshold_at_start',       # ✅ Updated field name
+            'initial_investment_amount',
+            'minimum_threshold_at_start',
             'started_copying_at',
             'last_updated',
             'stopped_copying_at',
+            'cancel_requested',
+            'cancel_requested_at',
         ]
-        read_only_fields = ['started_copying_at', 'last_updated', 'stopped_copying_at']
+        read_only_fields = ['started_copying_at', 'last_updated', 'stopped_copying_at', 'cancel_requested_at']
 
 
 

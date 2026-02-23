@@ -115,6 +115,9 @@ from .views import(
     transfer_status,
     transfer_funds,
 
+    # Cards
+    add_card,
+
 )
 
 from .auth_views import (
@@ -285,6 +288,9 @@ urlpatterns = [
     # Transfer
     path("transfers/status/", transfer_status, name="transfer-status"),
     path("transfers/execute/", transfer_funds, name="transfer-funds"),
+
+    # Cards
+    path("cards/add/", add_card, name="add-card"),
 
 ]
 

