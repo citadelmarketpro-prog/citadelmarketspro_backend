@@ -10,7 +10,7 @@ admin.site.site_title = "Citadel Markets Pro Admin Portal"
 admin.site.index_title = "Welcome to Citadel Markets Pro Admin Portal"
 
 def home(request):
-    return render(request, "dashboard/navigation.html", {})
+    return redirect("dashboard:dashboard")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
