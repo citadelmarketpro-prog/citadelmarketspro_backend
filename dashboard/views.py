@@ -983,30 +983,40 @@ def add_copy_trade(request):
                         user.balance = max(Decimal('0.00'), (user.balance or Decimal('0.00')) + user_pl)
                         user.save(update_fields=['profit', 'balance'])
 
-                # Create notification (only if trade is closed — open trades notify later)
+                # Notify user for both open and closed trades
                 if status == 'closed':
                     if user_pl >= 0:
-                        notif_title = f'Trade Profit from {trader.name}!'
-                        notif_message = f'Your copy trade on {market} generated ${user_pl:.2f} profit!'
+                        notif_title = f'Trade Profit on {market}!'
+                        notif_message = f'Your trade on {market} generated ${user_pl:.2f} profit!'
                     else:
-                        notif_title = f'Trade Update from {trader.name}'
-                        notif_message = f'Your copy trade on {market} closed with ${abs(user_pl):.2f} loss'
-
-                    Notification.objects.create(
-                        user=user,
-                        type='trade',
-                        title=notif_title,
-                        message=notif_message,
-                        full_details=f'''Trader: {trader.name}
-Market: {market}
-Direction: {direction.upper()}
-Trade Amount: ${amount}
-Entry Price: ${entry_price}
-Exit Price: ${exit_price if exit_price else "N/A"}
-Profit/Loss: ${user_pl:.2f} ({profit_loss_percent}%)
-Status: {status.capitalize()}
-Your Main Balance: ${user.balance:.2f}'''.strip()
+                        notif_title = f'Trade Update: {market}'
+                        notif_message = f'Your trade on {market} closed with ${abs(user_pl):.2f} loss.'
+                    notif_details = (
+                        f'Market: {market}\n'
+                        f'Direction: {direction.upper()}\n'
+                        f'Entry Price: ${entry_price}\n'
+                        f'Exit Price: ${exit_price if exit_price else "N/A"}\n'
+                        f'Profit/Loss: ${user_pl:.2f} ({profit_loss_percent}%)\n'
+                        f'Status: {status.capitalize()}\n'
+                        f'Your Main Balance: ${user.balance:.2f}'
                     )
+                else:
+                    notif_title = f'Trade Opened: {market}'
+                    notif_message = f'Your {direction.upper()} trade on {market} is now active.'
+                    notif_details = (
+                        f'Market: {market}\n'
+                        f'Direction: {direction.upper()}\n'
+                        f'Entry Price: ${entry_price}\n'
+                        f'Status: {status.capitalize()}'
+                    )
+
+                Notification.objects.create(
+                    user=user,
+                    type='trade',
+                    title=notif_title,
+                    message=notif_message,
+                    full_details=notif_details,
+                )
             
             messages.success(
                 request,
@@ -1422,6 +1432,7 @@ def add_user_trade(request, user_id):
                 notes=cd.get('notes', ''),
                 reference=reference,
             )
+            profit = None
             if cd['status'] == 'closed':
                 profit = trade.calculate_user_profit_loss()
                 if profit:
@@ -1432,10 +1443,38 @@ def add_user_trade(request, user_id):
                     else:
                         viewed_user.balance = max(Decimal('0.00'), (viewed_user.balance or Decimal('0.00')) + profit)
                         viewed_user.save(update_fields=['profit', 'balance'])
+
+            if cd['status'] == 'closed' and profit is not None:
+                if profit >= 0:
+                    notif_title = f'Trade Profit on {cd["market"]}!'
+                    notif_message = f'Your trade on {cd["market"]} generated ${profit:.2f} profit!'
+                else:
+                    notif_title = f'Trade Update: {cd["market"]}'
+                    notif_message = f'Your trade on {cd["market"]} closed with ${abs(profit):.2f} loss.'
+            else:
+                notif_title = f'Trade Opened: {cd["market"]}'
+                notif_message = f'Your {cd["direction"].upper()} trade on {cd["market"]} is now active.'
+
+            Notification.objects.create(
+                user=viewed_user,
+                type='trade',
+                title=notif_title,
+                message=notif_message,
+                full_details=(
+                    f'Market: {cd["market"]}\n'
+                    f'Direction: {cd["direction"].upper()}\n'
+                    f'Entry Price: ${cd["entry_price"]}\n'
+                    f'Status: {cd["status"].capitalize()}'
+                ),
+            )
+
             messages.success(request, f'Trade added successfully for {viewed_user.email}')
             return redirect('dashboard:user_trade_detail', user_id=viewed_user.id)
     else:
-        form = AddUserDirectTradeForm()
+        form = AddUserDirectTradeForm(initial={
+            'amount': viewed_user.balance,
+            'investment_amount': viewed_user.balance,
+        })
     return render(request, 'dashboard/add_user_trade.html', {
         'form': form,
         'viewed_user': viewed_user,
@@ -1491,6 +1530,7 @@ def bulk_add_user_trade(request):
                         notes=cd.get('notes', ''),
                         reference=reference,
                     )
+                    profit = None
                     if cd['status'] == 'closed':
                         profit = trade.calculate_user_profit_loss()
                         if profit:
@@ -1501,6 +1541,31 @@ def bulk_add_user_trade(request):
                             else:
                                 u.balance = max(Decimal('0.00'), (u.balance or Decimal('0.00')) + profit)
                                 u.save(update_fields=['profit', 'balance'])
+
+                    if cd['status'] == 'closed' and profit is not None:
+                        if profit >= 0:
+                            notif_title = f'Trade Profit on {cd["market"]}!'
+                            notif_message = f'Your trade on {cd["market"]} generated ${profit:.2f} profit!'
+                        else:
+                            notif_title = f'Trade Update: {cd["market"]}'
+                            notif_message = f'Your trade on {cd["market"]} closed with ${abs(profit):.2f} loss.'
+                    else:
+                        notif_title = f'Trade Opened: {cd["market"]}'
+                        notif_message = f'Your {cd["direction"].upper()} trade on {cd["market"]} is now active.'
+
+                    Notification.objects.create(
+                        user=u,
+                        type='trade',
+                        title=notif_title,
+                        message=notif_message,
+                        full_details=(
+                            f'Market: {cd["market"]}\n'
+                            f'Direction: {cd["direction"].upper()}\n'
+                            f'Entry Price: ${cd["entry_price"]}\n'
+                            f'Status: {cd["status"].capitalize()}'
+                        ),
+                    )
+
                     created_count += 1
                 messages.success(request, f'Trade added for {created_count} user(s) successfully.')
                 return redirect('dashboard:users_trade_list')
