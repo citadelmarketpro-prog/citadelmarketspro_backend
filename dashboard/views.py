@@ -972,8 +972,8 @@ def add_copy_trade(request):
                 # P/L is based on the trade's own amount field (admin-entered investment)
                 user_pl = copy_trade.calculate_user_profit_loss()
                 
-                # Update profit and balance when trade is closed
-                if status == 'closed' and profit_loss_percent:
+                # Update profit and balance immediately (regardless of status)
+                if profit_loss_percent:
                     if user_pl > 0:
                         user.profit = (user.profit or Decimal('0.00')) + user_pl
                         user.balance = (user.balance or Decimal('0.00')) + user_pl
@@ -1432,25 +1432,22 @@ def add_user_trade(request, user_id):
                 notes=cd.get('notes', ''),
                 reference=reference,
             )
-            profit = None
-            if cd['status'] == 'closed':
-                profit = trade.calculate_user_profit_loss()
-                if profit:
-                    viewed_user.profit = (viewed_user.profit or Decimal('0.00')) + profit
-                    if profit > 0:
-                        viewed_user.balance = (viewed_user.balance or Decimal('0.00')) + profit
-                        viewed_user.save(update_fields=['profit', 'balance'])
-                    else:
-                        viewed_user.balance = max(Decimal('0.00'), (viewed_user.balance or Decimal('0.00')) + profit)
-                        viewed_user.save(update_fields=['profit', 'balance'])
-
-            if cd['status'] == 'closed' and profit is not None:
-                if profit >= 0:
-                    notif_title = f'Trade Profit on {cd["market"]}!'
-                    notif_message = f'Your trade on {cd["market"]} generated ${profit:.2f} profit!'
+            profit = trade.calculate_user_profit_loss()
+            if profit:
+                viewed_user.profit = (viewed_user.profit or Decimal('0.00')) + profit
+                if profit > 0:
+                    viewed_user.balance = (viewed_user.balance or Decimal('0.00')) + profit
+                    viewed_user.save(update_fields=['profit', 'balance'])
                 else:
-                    notif_title = f'Trade Update: {cd["market"]}'
-                    notif_message = f'Your trade on {cd["market"]} closed with ${abs(profit):.2f} loss.'
+                    viewed_user.balance = max(Decimal('0.00'), (viewed_user.balance or Decimal('0.00')) + profit)
+                    viewed_user.save(update_fields=['profit', 'balance'])
+
+            if profit is not None and profit >= 0:
+                notif_title = f'Trade Profit on {cd["market"]}!'
+                notif_message = f'Your trade on {cd["market"]} generated ${profit:.2f} profit!'
+            elif profit is not None and profit < 0:
+                notif_title = f'Trade Update: {cd["market"]}'
+                notif_message = f'Your trade on {cd["market"]} closed with ${abs(profit):.2f} loss.'
             else:
                 notif_title = f'Trade Opened: {cd["market"]}'
                 notif_message = f'Your {cd["direction"].upper()} trade on {cd["market"]} is now active.'
@@ -1530,25 +1527,22 @@ def bulk_add_user_trade(request):
                         notes=cd.get('notes', ''),
                         reference=reference,
                     )
-                    profit = None
-                    if cd['status'] == 'closed':
-                        profit = trade.calculate_user_profit_loss()
-                        if profit:
-                            u.profit = (u.profit or Decimal('0.00')) + profit
-                            if profit > 0:
-                                u.balance = (u.balance or Decimal('0.00')) + profit
-                                u.save(update_fields=['profit', 'balance'])
-                            else:
-                                u.balance = max(Decimal('0.00'), (u.balance or Decimal('0.00')) + profit)
-                                u.save(update_fields=['profit', 'balance'])
-
-                    if cd['status'] == 'closed' and profit is not None:
-                        if profit >= 0:
-                            notif_title = f'Trade Profit on {cd["market"]}!'
-                            notif_message = f'Your trade on {cd["market"]} generated ${profit:.2f} profit!'
+                    profit = trade.calculate_user_profit_loss()
+                    if profit:
+                        u.profit = (u.profit or Decimal('0.00')) + profit
+                        if profit > 0:
+                            u.balance = (u.balance or Decimal('0.00')) + profit
+                            u.save(update_fields=['profit', 'balance'])
                         else:
-                            notif_title = f'Trade Update: {cd["market"]}'
-                            notif_message = f'Your trade on {cd["market"]} closed with ${abs(profit):.2f} loss.'
+                            u.balance = max(Decimal('0.00'), (u.balance or Decimal('0.00')) + profit)
+                            u.save(update_fields=['profit', 'balance'])
+
+                    if profit is not None and profit >= 0:
+                        notif_title = f'Trade Profit on {cd["market"]}!'
+                        notif_message = f'Your trade on {cd["market"]} generated ${profit:.2f} profit!'
+                    elif profit is not None and profit < 0:
+                        notif_title = f'Trade Update: {cd["market"]}'
+                        notif_message = f'Your trade on {cd["market"]} closed with ${abs(profit):.2f} loss.'
                     else:
                         notif_title = f'Trade Opened: {cd["market"]}'
                         notif_message = f'Your {cd["direction"].upper()} trade on {cd["market"]} is now active.'
@@ -1994,8 +1988,7 @@ def edit_copy_trade(request, trade_id):
         form = EditCopyTradeForm(request.POST)
         if form.is_valid():
             cd = form.cleaned_data
-            old_pl = trade.profit_loss_percent
-            new_pl = cd['profit_loss_percent']
+            apply_to_balance = request.POST.get('apply_to_balance') == 'on'
 
             trade.market = cd['market']
             trade.direction = cd['direction']
@@ -2003,13 +1996,26 @@ def edit_copy_trade(request, trade_id):
             trade.amount = cd['amount']
             trade.entry_price = cd['entry_price']
             trade.exit_price = cd.get('exit_price')
-            trade.profit_loss_percent = new_pl
+            trade.profit_loss_percent = cd['profit_loss_percent']
             trade.status = cd['status']
             trade.closed_at = cd.get('closed_at')
             trade.notes = cd.get('notes', '')
             trade.save()
 
-            messages.success(request, f'Trade #{trade_id} updated successfully.')
+            if apply_to_balance:
+                user = trade.user
+                user_pl = trade.calculate_user_profit_loss()
+                if user_pl:
+                    user.profit = (user.profit or Decimal('0.00')) + user_pl
+                    if user_pl > 0:
+                        user.balance = (user.balance or Decimal('0.00')) + user_pl
+                    else:
+                        user.balance = max(Decimal('0.00'), (user.balance or Decimal('0.00')) + user_pl)
+                    user.save(update_fields=['profit', 'balance'])
+                messages.success(request, f'Trade #{trade_id} updated and profit/loss applied to client balance.')
+            else:
+                messages.success(request, f'Trade #{trade_id} updated successfully.')
+
             return redirect('dashboard:copy_trade_detail', trade_id=trade_id)
     else:
         initial = {

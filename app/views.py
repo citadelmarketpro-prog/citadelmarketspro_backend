@@ -4022,68 +4022,6 @@ def get_copy_trade_detail(request, trade_id):
     }, status=status.HTTP_200_OK)
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-@authentication_classes([TokenAuthentication])
-def close_copy_trade(request, trade_id):
-    """
-    POST: Close an open copy trade
-    """
-    user = request.user
-
-    try:
-        trade = UserCopyTraderHistory.objects.get(
-            id=trade_id,
-            user=user,
-            status='open'
-        )
-    except UserCopyTraderHistory.DoesNotExist:
-        return Response({
-            "success": False,
-            "error": "Trade not found or already closed"
-        }, status=status.HTTP_404_NOT_FOUND)
-    
-    # Update trade status
-    trade.status = 'closed'
-    trade.closed_at = timezone.now()
-    trade.save()
-
-    # P/L is based on the trade's own amount field (admin-entered investment)
-    user_pl = trade.calculate_user_profit_loss()
-
-    # Apply P/L entirely to main balance (gain adds, loss deducts, floor at 0)
-    current_balance = user.balance or Decimal('0.00')
-    if user_pl > 0:
-        user.balance = current_balance + user_pl
-        user.save(update_fields=['balance'])
-    elif user_pl < 0 and current_balance > Decimal('0.00'):
-        user.balance = max(Decimal('0.00'), current_balance + user_pl)
-        user.save(update_fields=['balance'])
-
-    # Notification
-    if user_pl >= 0:
-        notif_title = "Copy Trade Closed — Profit!"
-        notif_message = f"Your {trade.market} {trade.direction} trade closed with ${user_pl:.2f} profit."
-    else:
-        notif_title = "Copy Trade Closed"
-        notif_message = f"Your {trade.market} {trade.direction} trade closed with ${abs(user_pl):.2f} loss."
-
-    Notification.objects.create(
-        user=user,
-        type="trade",
-        title=notif_title,
-        message=notif_message,
-        full_details=f"Market: {trade.market}\nDirection: {trade.direction}\nProfit/Loss %: {float(trade.profit_loss_percent):.2f}%\nYour P/L: ${user_pl:.2f}\nReference: {trade.reference}",
-    )
-
-    return Response({
-        "success": True,
-        "message": "Trade closed successfully",
-        "user_profit_loss": float(user_pl),
-        "balance": float(user.balance),
-        "profit": float(user.profit),
-        "trade": UserCopyTraderHistorySerializer(trade).data
-    }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

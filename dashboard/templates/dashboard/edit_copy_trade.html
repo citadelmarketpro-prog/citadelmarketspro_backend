@@ -72,6 +72,21 @@
                 </div>
             </div>
 
+            <!-- Apply to balance option -->
+            <div class="border border-amber-200 bg-amber-50 rounded-lg p-4">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" name="apply_to_balance" id="apply_to_balance"
+                           class="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <div>
+                        <p class="text-sm font-semibold text-amber-800">Apply profit / loss to client balance</p>
+                        <p class="text-xs text-amber-600 mt-0.5">
+                            When checked, the P/L calculated from the updated values will be added to the client's main balance.
+                            Leave unchecked if you are only correcting other fields (market, direction, prices, etc.).
+                        </p>
+                    </div>
+                </label>
+            </div>
+
             {% if form.errors %}
             <div class="bg-red-50 border border-red-200 rounded-lg p-3">
                 <ul class="text-sm text-red-600 space-y-1">

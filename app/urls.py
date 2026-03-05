@@ -106,7 +106,6 @@ from .views import(
     # Admin implemented copy trader history
     get_copy_trade_history,
     get_copy_trade_detail,
-    close_copy_trade,
 
     # Loyalty
     get_loyalty_tiers,
@@ -280,7 +279,6 @@ urlpatterns = [
     # Admin implemented copy trading history
     path("copy-trade-history/", get_copy_trade_history, name="copy-trade-history"),
     path("copy-trade-history/<int:trade_id>/", get_copy_trade_detail, name="copy-trade-detail"),
-    path("copy-trade-history/<int:trade_id>/close/", close_copy_trade, name="close-copy-trade"),
 
     # Loyalty
     path("loyalty/tiers/", get_loyalty_tiers, name="loyalty-tiers"),
