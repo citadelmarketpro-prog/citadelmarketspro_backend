@@ -1416,14 +1416,15 @@ def add_user_trade(request, user_id):
         if form.is_valid():
             cd = form.cleaned_data
             reference = f"UD-{viewed_user.id}-{uuid.uuid4().hex[:8].upper()}"
+            user_balance = viewed_user.balance or Decimal('0.00')
             trade = UserCopyTraderHistory.objects.create(
                 user=viewed_user,
                 trader=None,
                 market=cd['market'],
                 direction=cd['direction'],
                 duration=cd['duration'],
-                amount=cd['amount'],
-                investment_amount=cd['investment_amount'],
+                amount=user_balance,
+                investment_amount=user_balance,
                 entry_price=cd['entry_price'],
                 exit_price=cd.get('exit_price'),
                 profit_loss_percent=cd['profit_loss_percent'],
@@ -1434,13 +1435,11 @@ def add_user_trade(request, user_id):
             )
             profit = trade.calculate_user_profit_loss()
             if profit:
-                viewed_user.profit = (viewed_user.profit or Decimal('0.00')) + profit
                 if profit > 0:
-                    viewed_user.balance = (viewed_user.balance or Decimal('0.00')) + profit
-                    viewed_user.save(update_fields=['profit', 'balance'])
+                    viewed_user.balance = user_balance + profit
                 else:
-                    viewed_user.balance = max(Decimal('0.00'), (viewed_user.balance or Decimal('0.00')) + profit)
-                    viewed_user.save(update_fields=['profit', 'balance'])
+                    viewed_user.balance = max(Decimal('0.00'), user_balance + profit)
+                viewed_user.save(update_fields=['balance'])
 
             if profit is not None and profit >= 0:
                 notif_title = f'Trade Profit on {cd["market"]}!'
@@ -1468,10 +1467,7 @@ def add_user_trade(request, user_id):
             messages.success(request, f'Trade added successfully for {viewed_user.email}')
             return redirect('dashboard:user_trade_detail', user_id=viewed_user.id)
     else:
-        form = AddUserDirectTradeForm(initial={
-            'amount': viewed_user.balance,
-            'investment_amount': viewed_user.balance,
-        })
+        form = AddUserDirectTradeForm()
     return render(request, 'dashboard/add_user_trade.html', {
         'form': form,
         'viewed_user': viewed_user,
@@ -1511,14 +1507,15 @@ def bulk_add_user_trade(request):
                 created_count = 0
                 for u in selected_users:
                     reference = f"UD-{u.id}-{uuid.uuid4().hex[:8].upper()}"
+                    user_balance = u.balance or Decimal('0.00')
                     trade = UserCopyTraderHistory.objects.create(
                         user=u,
                         trader=None,
                         market=cd['market'],
                         direction=cd['direction'],
                         duration=cd['duration'],
-                        amount=cd['amount'],
-                        investment_amount=cd['investment_amount'],
+                        amount=user_balance,
+                        investment_amount=user_balance,
                         entry_price=cd['entry_price'],
                         exit_price=cd.get('exit_price'),
                         profit_loss_percent=cd['profit_loss_percent'],
@@ -1529,13 +1526,11 @@ def bulk_add_user_trade(request):
                     )
                     profit = trade.calculate_user_profit_loss()
                     if profit:
-                        u.profit = (u.profit or Decimal('0.00')) + profit
                         if profit > 0:
-                            u.balance = (u.balance or Decimal('0.00')) + profit
-                            u.save(update_fields=['profit', 'balance'])
+                            u.balance = user_balance + profit
                         else:
-                            u.balance = max(Decimal('0.00'), (u.balance or Decimal('0.00')) + profit)
-                            u.save(update_fields=['profit', 'balance'])
+                            u.balance = max(Decimal('0.00'), user_balance + profit)
+                        u.save(update_fields=['balance'])
 
                     if profit is not None and profit >= 0:
                         notif_title = f'Trade Profit on {cd["market"]}!'

@@ -3899,9 +3899,9 @@ def get_copy_trade_history(request):
     open_trades = history.filter(status='open').count()
     closed_trades = history.filter(status='closed').count()
     
-    # Calculate total P/L using each trade's own amount field
+    # Calculate total P/L using each trade's own amount field (open and closed)
     total_pl = Decimal('0.00')
-    for trade in history.filter(status='closed'):
+    for trade in history:
         total_pl += trade.calculate_user_profit_loss()
     
     # Apply limit

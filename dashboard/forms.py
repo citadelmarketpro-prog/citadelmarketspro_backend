@@ -691,21 +691,6 @@ class AddUserDirectTradeForm(forms.Form):
         widget=forms.Select(attrs={'class': _select}),
     )
 
-    amount = forms.DecimalField(
-        label="Base Trade Amount",
-        max_digits=20,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': _input, 'placeholder': '1000.00', 'step': '0.01'}),
-    )
-
-    investment_amount = forms.DecimalField(
-        label="User Investment Amount",
-        max_digits=20,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': _input, 'placeholder': '5000.00', 'step': '0.01'}),
-        help_text="Used to calculate the user's dollar P/L",
-    )
-
     entry_price = forms.DecimalField(
         label="Entry Price",
         max_digits=20,
