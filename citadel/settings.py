@@ -169,6 +169,7 @@ WHITENOISE_AUTOREFRESH = DEBUG
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://citadelmarketspro.netlify.app",
+    "https://citadelmarketspro.onrender.com",
     "https://citadelprofront.vercel.app",
     "https://www.citadelmarketspro.com",
     "https://citadelmarketspro.com",
