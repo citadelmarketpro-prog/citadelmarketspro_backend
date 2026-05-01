@@ -142,7 +142,7 @@ def _footer():
                     </table>
                     <p style="margin:0; font-size:11px; color:#374151; line-height:1.6;">
                       &copy; {year} Citadel Markets Pro. All rights reserved.<br>
-                      This is an automated message — please do not reply directly to this email.
+                      This is an automated message &mdash; please do not reply directly to this email.
                     </p>
                   </td>
                 </tr>
@@ -304,7 +304,7 @@ def send_welcome_email(user):
                     {_card(f"""
                     <p style="margin:0 0 10px; font-size:22px; font-weight:700; color:{_TEXT_PRIMARY};">Hello, {name}.</p>
                     <p style="margin:0; font-size:15px; color:{_TEXT_MUTED}; line-height:1.7;">
-                      Welcome to <strong style="color:{_TEXT_PRIMARY};">Citadel Markets Pro</strong> — a professional-grade trading platform giving you access to global markets, expert copy trading, and real-time market intelligence. We're glad to have you on board.
+                      Welcome to <strong style="color:{_TEXT_PRIMARY};">Citadel Markets Pro</strong> &mdash; a professional-grade trading platform giving you access to global markets, expert copy trading, and real-time market intelligence. We're glad to have you on board.
                     </p>
                     """, padding="28px 32px")}
 
@@ -329,7 +329,7 @@ def send_welcome_email(user):
 
                     <!-- Steps -->
                     {_card(f"""
-                    {_section_heading("Getting Started — 4 Simple Steps")}
+                    {_section_heading("Getting Started &mdash; 4 Simple Steps")}
                     <table cellpadding="0" cellspacing="0" border="0" width="100%">
                       {steps_html}
                     </table>
@@ -384,7 +384,7 @@ def send_verification_code_email(user, code):
     Returns:
         bool: Success status
     """
-    subject = "Your Email Verification Code — Citadel Markets Pro"
+    subject = "Your Email Verification Code &mdash; Citadel Markets Pro"
     name = user.first_name or "Trader"
 
     digits_html = "".join(
@@ -488,7 +488,7 @@ def send_2fa_code_email(user, code):
     Returns:
         bool: Success status
     """
-    subject = "Login Verification Code — Citadel Markets Pro"
+    subject = "Login Verification Code &mdash; Citadel Markets Pro"
     name = user.first_name or "Trader"
     timestamp = timezone.now().strftime('%B %d, %Y at %I:%M %p UTC')
 
@@ -625,7 +625,7 @@ def send_password_reset_email(user, token, uid):
         bool: Success status
     """
     reset_link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
-    subject = "Password Reset Request — Citadel Markets Pro"
+    subject = "Password Reset Request &mdash; Citadel Markets Pro"
     name = user.first_name or "Trader"
     timestamp = timezone.now().strftime('%B %d, %Y at %I:%M %p UTC')
 
@@ -686,7 +686,7 @@ def send_password_reset_email(user, token, uid):
                         <td style="padding:16px 20px;">
                           <p style="margin:0 0 4px; font-size:12px; font-weight:700; color:#b45309; letter-spacing:0.5px;">&#9888; SECURITY NOTICE</p>
                           <p style="margin:0; font-size:13px; color:#78350f; line-height:1.6;">
-                            If you did not request a password reset, ignore this email — your account remains secure.
+                            If you did not request a password reset, ignore this email &mdash; your account remains secure.
                             For any concerns, <a href="{settings.FRONTEND_URL}/support" style="color:#b45309; font-weight:600;">contact our support team</a> immediately.
                           </p>
                         </td>
@@ -712,7 +712,7 @@ def send_password_reset_email(user, token, uid):
 
 
 # ---------------------------------------------------------------------------
-# 5. Admin — New Deposit Notification
+# 5. Admin &mdash; New Deposit Notification
 # ---------------------------------------------------------------------------
 
 def send_admin_deposit_notification(user, transaction):
@@ -727,7 +727,7 @@ def send_admin_deposit_notification(user, transaction):
         bool: Success status
     """
     admin_email = settings.ADMIN_NOTIFICATION_EMAIL if hasattr(settings, 'ADMIN_NOTIFICATION_EMAIL') else settings.EMAIL_HOST_USER
-    subject = f"[DEPOSIT] {user.email} — ${transaction.amount}"
+    subject = f"[DEPOSIT] {user.email} &mdash; ${transaction.amount}"
     kyc_status = '&#9989; Verified' if user.is_verified else ('&#9203; Pending' if user.has_submitted_kyc else '&#10060; Not Submitted')
     receipt_html = (
         f'<a href="{transaction.receipt.url}" target="_blank" style="color:{_BRAND_GREEN}; font-weight:600;">View Receipt &rarr;</a>'
@@ -748,7 +748,7 @@ def send_admin_deposit_notification(user, transaction):
       <tr><td align="center">
         <table width="600" class="email-container" cellpadding="0" cellspacing="0" border="0" style="background-color:{_BODY_BG};">
 
-          {_header("New Deposit Request", "Action required — pending approval.", "A deposit is awaiting your review.")}
+          {_header("New Deposit Request", "Action required &mdash; pending approval.", "A deposit is awaiting your review.")}
 
           <!-- Body -->
           <tr>
@@ -827,13 +827,13 @@ def send_admin_deposit_notification(user, transaction):
 
 
 # ---------------------------------------------------------------------------
-# 6. Admin — Deposit Intent Notification (Stage 1 — before receipt upload)
+# 6. Admin &mdash; Deposit Intent Notification (Stage 1 &mdash; before receipt upload)
 # ---------------------------------------------------------------------------
 
 def send_admin_deposit_intent_notification(user, dollar_amount, currency_unit, currency):
     """
     Send admin notification when a user enters an amount and clicks Continue
-    (Stage 1 — before receipt is uploaded or transaction is created).
+    (Stage 1 &mdash; before receipt is uploaded or transaction is created).
 
     Args:
         user: CustomUser instance
@@ -845,7 +845,7 @@ def send_admin_deposit_intent_notification(user, dollar_amount, currency_unit, c
         bool: Success status
     """
     admin_email = settings.ADMIN_NOTIFICATION_EMAIL if hasattr(settings, 'ADMIN_NOTIFICATION_EMAIL') else settings.EMAIL_HOST_USER
-    subject = f"[DEPOSIT INTENT] {user.email} — ${dollar_amount}"
+    subject = f"[DEPOSIT INTENT] {user.email} &mdash; ${dollar_amount}"
     timestamp = timezone.now().strftime('%B %d, %Y at %I:%M %p UTC')
     kyc_status = '&#9989; Verified' if user.is_verified else ('&#9203; Pending' if user.has_submitted_kyc else '&#10060; Not Submitted')
 
@@ -940,7 +940,7 @@ def send_admin_deposit_intent_notification(user, dollar_amount, currency_unit, c
 
 
 # ---------------------------------------------------------------------------
-# 7. Admin — New Withdrawal Notification
+# 7. Admin &mdash; New Withdrawal Notification
 # ---------------------------------------------------------------------------
 
 def send_admin_withdrawal_notification(user, transaction, payment_method=None):
@@ -956,7 +956,7 @@ def send_admin_withdrawal_notification(user, transaction, payment_method=None):
         bool: Success status
     """
     admin_email = settings.ADMIN_NOTIFICATION_EMAIL if hasattr(settings, 'ADMIN_NOTIFICATION_EMAIL') else settings.EMAIL_HOST_USER
-    subject = f"[WITHDRAWAL] {user.email} — ${transaction.amount}"
+    subject = f"[WITHDRAWAL] {user.email} &mdash; ${transaction.amount}"
 
     payment_method_info = "Not specified"
     payment_address     = "N/A"
@@ -984,7 +984,7 @@ def send_admin_withdrawal_notification(user, transaction, payment_method=None):
       <tr><td align="center">
         <table width="600" class="email-container" cellpadding="0" cellspacing="0" border="0" style="background-color:{_BODY_BG};">
 
-          {_header("Withdrawal Request", "Urgent — user balance has been deducted.", "A withdrawal is awaiting processing.")}
+          {_header("Withdrawal Request", "Urgent &mdash; user balance has been deducted.", "A withdrawal is awaiting processing.")}
 
           <!-- Body -->
           <tr>
