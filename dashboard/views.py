@@ -1377,17 +1377,9 @@ def investor_detail(request, user_id):
 @admin_required
 def users_trade_list(request):
     """List all users for user-direct trade management, with bulk-select support."""
-    search = request.GET.get('q', '').strip()
-    users = CustomUser.objects.filter(is_active=True).order_by('email')
-    if search:
-        users = users.filter(
-            Q(email__icontains=search) |
-            Q(first_name__icontains=search) |
-            Q(last_name__icontains=search)
-        )
+    users = CustomUser.objects.filter(is_active=True, balance__gt=0).order_by('email')
     return render(request, 'dashboard/users_trade_list.html', {
         'users': users,
-        'search': search,
         'total_count': users.count(),
     })
 

@@ -26,21 +26,11 @@
     </div>
 </div>
 
-<!-- Search -->
-<form method="get" action="" class="mb-4 flex flex-col sm:flex-row gap-3">
-    <input type="text" name="q" value="{{ search }}" placeholder="Search by email, name..."
-        class="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-    <button type="submit"
-        class="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
-        Search
-    </button>
-    {% if search %}
-    <a href="{% url 'dashboard:users_trade_list' %}"
-        class="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-200 transition text-center">
-        Clear
-    </a>
-    {% endif %}
-</form>
+<!-- Client-side search -->
+<div class="mb-4">
+    <input type="text" id="search-input" placeholder="Search by email or name..."
+        class="w-full sm:w-96 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+</div>
 
 <!-- Users table with bulk-select -->
 <form method="post" action="{% url 'dashboard:bulk_add_user_trade' %}" id="bulk-form">
@@ -70,13 +60,15 @@
                         <th class="px-5 py-3 w-10"></th>
                         <th class="px-5 py-3">User</th>
                         <th class="px-5 py-3">Email</th>
+                        <th class="px-5 py-3">Balance</th>
                         <th class="px-5 py-3">Joined</th>
                         <th class="px-5 py-3">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody id="users-tbody" class="divide-y divide-gray-100">
                     {% for u in users %}
-                    <tr class="hover:bg-gray-50 transition">
+                    <tr class="user-row hover:bg-gray-50 transition"
+                        data-search="{{ u.first_name|lower }} {{ u.last_name|lower }} {{ u.email|lower }}">
                         <td class="px-5 py-3">
                             <input type="checkbox" name="user_ids" value="{{ u.id }}"
                                 class="user-checkbox w-4 h-4 rounded text-blue-600"
@@ -91,6 +83,7 @@
                             </div>
                         </td>
                         <td class="px-5 py-3 text-gray-600">{{ u.email }}</td>
+                        <td class="px-5 py-3 font-semibold text-gray-800">${{ u.balance|floatformat:2 }}</td>
                         <td class="px-5 py-3 text-xs text-gray-400">{{ u.date_joined|date:"M d, Y" }}</td>
                         <td class="px-5 py-3">
                             <div class="flex gap-2">
@@ -106,24 +99,52 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr>
-                        <td colspan="5" class="px-5 py-10 text-center text-gray-400">
+                    <tr id="empty-row">
+                        <td colspan="6" class="px-5 py-10 text-center text-gray-400">
                             <i class="fas fa-users text-2xl mb-2 block"></i>
-                            No users found{% if search %} matching "{{ search }}"{% endif %}
+                            No users found
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            <!-- No-results row shown by JS when search yields nothing -->
+            <div id="no-results" class="hidden px-5 py-10 text-center text-gray-400">
+                <i class="fas fa-search text-2xl mb-2 block"></i>
+                No users match your search
+            </div>
         </div>
     </div>
 </form>
 
 <script>
+const searchInput = document.getElementById('search-input');
+const rows = document.querySelectorAll('.user-row');
+const noResults = document.getElementById('no-results');
+
+searchInput.addEventListener('input', function () {
+    const q = this.value.toLowerCase().trim();
+    let visible = 0;
+
+    rows.forEach(row => {
+        const match = !q || row.dataset.search.includes(q);
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+
+    noResults.classList.toggle('hidden', visible > 0);
+    updateBulkBtn();
+});
+
 function toggleAll(masterCb) {
-    document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = masterCb.checked);
+    rows.forEach(row => {
+        if (row.style.display !== 'none') {
+            row.querySelector('.user-checkbox').checked = masterCb.checked;
+        }
+    });
     updateBulkBtn();
 }
+
 function updateBulkBtn() {
     const checked = document.querySelectorAll('.user-checkbox:checked').length;
     document.getElementById('selected-count').textContent = `(${checked} selected)`;
