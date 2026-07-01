@@ -1107,6 +1107,7 @@ def add_trader(request):
                 avg_score_7d=cd.get('avg_score_7d') or Decimal('0.00'),
                 profitable_weeks=cd.get('profitable_weeks') or Decimal('0.00'),
                 total_trades_12m=cd.get('total_trades_12m') or 0,
+                profit_share=cd.get('profit_share') or 50,
                 is_active=cd.get('is_active', True),
             )
             # Assign images separately and save — mirrors edit_trader which works correctly
@@ -1203,6 +1204,7 @@ def edit_trader(request, trader_id):
             trader.avg_score_7d = cd.get('avg_score_7d') or Decimal('0.00')
             trader.profitable_weeks = cd.get('profitable_weeks') or Decimal('0.00')
             trader.total_trades_12m = cd.get('total_trades_12m') or 0
+            trader.profit_share = cd.get('profit_share') or 50
             trader.is_active = cd.get('is_active', True)
 
             trader.save()
@@ -1233,6 +1235,7 @@ def edit_trader(request, trader_id):
             'avg_score_7d': trader.avg_score_7d,
             'profitable_weeks': trader.profitable_weeks,
             'total_trades_12m': trader.total_trades_12m,
+            'profit_share': trader.profit_share,
             'is_active': trader.is_active,
         }
         form = EditTraderForm(initial=initial_data)
